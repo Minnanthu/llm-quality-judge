@@ -27,11 +27,14 @@ argument-hint: "[run-config.yaml]"
 - `data/testcases.jsonl`（テストケース。タスク種別、入力、制約、期待形式など）
 
 ### Required testcase fields (Quality)
-`data/testcases.jsonl` は少なくとも以下を持つこと（`schemas/testcases.schema.json` 準拠）。
+`data/testcases.jsonl` は `schemas/testcases.schema.json` に準拠する。
 
+**必須（schema required）:**
 - `testcase_id`: ケースの一意ID
 - `task_type`: `preprocessing` / `report_generation` / `report_qa`
 - `input`: 評価対象入力（オブジェクト）
+
+**推奨（schema optional だが品質評価に必要）:**
 - `constraints`: 制約（`required_points`, `forbidden_points`, `output_format`, `citation_policy`）
 - `metadata`: 難易度 (`difficulty`), 入力長バケット (`input_length_bucket`: S/M/L), `tags`
 
@@ -57,18 +60,23 @@ argument-hint: "[run-config.yaml]"
 方式の改善は、原則として **run-config と judge rubric** の更新で行い、artifactスキーマは安定させる。
 
 ### Required run-config fields (Quality)
-`run-config.yaml` は `schemas/run-config.schema.json` に準拠し、以下のトップレベル構造を持つ。
+`run-config.yaml` は `schemas/run-config.schema.json` に準拠する。
 
+**必須（schema required）:**
 - `run_id`: 実行の一意ID
-- `candidates`: 候補モデル配列（`candidate_id`, `vendor`, `model_id`, `generation_params` 等）
-- `judges`: Judgeモデル配列（`judge_id`, `vendor`, `model_id`, `rubric_version` 等）
-- `dataset`: テストケースファイルのパスとバージョン
-- `protocol`: 評価プロトコル設定
+- `candidates`: 候補モデル配列（各要素: `candidate_id`, `vendor`, `model_id` が必須）
+- `judges`: Judgeモデル配列（各要素: `judge_id`, `vendor`, `model_id`, `rubric_version` が必須）
+- `dataset`: `testcases_path` が必須
+- `protocol`: 以下が必須
+  - `scoring_scale`: スコア配列（デフォルト `[1, 3, 5]`）
   - `evaluation_mode`: `pairwise` / `absolute` / `hybrid`
-  - `blinding`: `enabled` (bool), `random_seed` (int)
-  - `repeats`: `inference_repeats`, `judge_repeats`
-  - `metrics`: 評価指標リスト
-  - `aggregation`: `method` (`mean`/`majority_vote`/`worst_case`/`custom`), `weights`
+  - `aggregation`: `method` (`mean`/`majority_vote`/`worst_case`/`custom`) が必須、`weights` は任意
+
+**推奨（schema optional だが品質評価に必要）:**
+- `protocol.blinding`: `enabled` (bool), `random_seed` (int)
+- `protocol.repeats`: `inference_repeats`, `judge_repeats`
+- `protocol.metrics`: 評価指標リスト
+- `dataset.dataset_version`: データセットバージョン
 
 ### Required metrics (default)
 `protocol.metrics` には、特段の理由がない限り以下を含める。
@@ -108,7 +116,7 @@ argument-hint: "[run-config.yaml]"
 - ケース総数、有効判定数、除外数
 - モデル別の勝率/敗率/同点率
 - 軸別平均スコアと分散（または信頼区間）
-- 反復実行の安定性指標（ケース内ばらつき）
+- 反復実行時の安定性指標（ケース内ばらつき）
 - `critical_issue` 件数（タスク別内訳含む）
 
 ## References

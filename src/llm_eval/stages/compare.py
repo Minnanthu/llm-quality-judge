@@ -17,10 +17,11 @@ from llm_eval.models import (
     JudgementRecord,
     NotableFailure,
     ReportDataset,
+    ReportSummary,
     Results,
     Testcase,
 )
-from llm_eval.utils import mean, read_jsonl, write_json, write_jsonl
+from llm_eval.utils import mean, read_jsonl, variance, write_json, write_jsonl
 
 
 def run_compare(
@@ -63,6 +64,7 @@ def run_compare(
     )
 
     agreement = _compute_judge_agreement(judgements)
+    summary = _compute_summary(judgements)
 
     report = ComparisonReport(
         run_id=cfg.run_id,
@@ -88,6 +90,7 @@ def run_compare(
             for j in cfg.judges
         ],
         protocol=cfg.protocol.model_dump(),
+        summary=summary,
         results=Results(
             overall=overall,
             by_task=by_task,
@@ -139,6 +142,14 @@ def _compute_aggregate(
             metric_scores[metric_id].append(score)
 
     mean_score = {m: round(mean(v), 2) for m, v in metric_scores.items()}
+    score_var = {m: round(variance(v), 4) for m, v in metric_scores.items()}
+
+    # Critical issue count per candidate (using per-candidate tracking)
+    ci_counts: dict[str, int] = defaultdict(int)
+    for jdg in judgements:
+        for cid in jdg.critical_issue_candidates:
+            ci_counts[cid] += 1
+    critical_issue_count = dict(ci_counts) if ci_counts else {}
 
     # Notable failures from autochecks
     failures: list[NotableFailure] = []
@@ -166,6 +177,8 @@ def _compute_aggregate(
     return AggregateBlock(
         win_rate=win_rate,
         mean_score=mean_score,
+        score_variance=score_var,
+        critical_issue_count=critical_issue_count,
         notable_failures=failures,
     )
 
@@ -250,6 +263,57 @@ def _compute_judge_agreement(judgements: list[JudgementRecord]) -> JudgeAgreemen
     )
 
 
+def _compute_summary(judgements: list[JudgementRecord]) -> ReportSummary:
+    """Compute overall summary statistics."""
+    total = len(judgements)
+    valid = sum(1 for j in judgements if j.scores.per_metric)
+    excluded = total - valid
+
+    stability = _compute_repeat_stability(judgements)
+
+    return ReportSummary(
+        total_judgements=total,
+        valid_judgements=valid,
+        excluded_judgements=excluded,
+        repeat_stability=stability,
+    )
+
+
+def _compute_repeat_stability(judgements: list[JudgementRecord]) -> float | None:
+    """Compute repeat stability: agreement rate within same (testcase, judge, target pair).
+
+    Groups pairwise judgements by (testcase_id, judge_id, target_pair) and measures
+    how often repeated judge calls agree on the winner.
+    """
+    groups: dict[str, list[str]] = defaultdict(list)
+
+    for jdg in judgements:
+        if jdg.mode != "pairwise":
+            continue
+        target_key = "|".join(sorted(t.candidate_id for t in jdg.targets))
+        key = f"{jdg.testcase_id}:{jdg.judge.judge_id}:{target_key}"
+        groups[key].append(jdg.scores.overall_winner or "tie")
+
+    # Only consider groups with repeats
+    repeat_groups = {k: v for k, v in groups.items() if len(v) >= 2}
+    if not repeat_groups:
+        return None
+
+    agreements = 0
+    total_pairs = 0
+    for winners in repeat_groups.values():
+        for i in range(len(winners)):
+            for j in range(i + 1, len(winners)):
+                total_pairs += 1
+                if winners[i] == winners[j]:
+                    agreements += 1
+
+    if total_pairs == 0:
+        return None
+
+    return round(agreements / total_pairs, 4)
+
+
 def _write_markdown_report(report: ComparisonReport, path: Path) -> None:
     """Write a human-readable markdown report."""
     lines: list[str] = []
@@ -261,6 +325,17 @@ def _write_markdown_report(report: ComparisonReport, path: Path) -> None:
         f"- Candidates: {', '.join(c.candidate_id for c in report.candidates)}"
     )
     lines.append(f"- Judges: {', '.join(j.judge_id for j in report.judges)}")
+    lines.append("")
+
+    # Summary
+    s = report.summary
+    lines.append("## Summary")
+    lines.append("")
+    lines.append(f"- Total judgements: {s.total_judgements}")
+    lines.append(f"- Valid judgements: {s.valid_judgements}")
+    lines.append(f"- Excluded judgements: {s.excluded_judgements}")
+    if s.repeat_stability is not None:
+        lines.append(f"- Repeat stability: {s.repeat_stability:.1%}")
     lines.append("")
 
     # Overall results
@@ -275,10 +350,12 @@ def _write_markdown_report(report: ComparisonReport, path: Path) -> None:
 
     if report.results.overall.mean_score:
         lines.append("### Mean Scores by Metric")
-        lines.append("| Metric | Score |")
-        lines.append("|--------|-------|")
+        var_data = report.results.overall.score_variance
+        lines.append("| Metric | Mean | Variance |")
+        lines.append("|--------|------|----------|")
         for metric, score in sorted(report.results.overall.mean_score.items()):
-            lines.append(f"| {metric} | {score:.2f} |")
+            v = var_data.get(metric, 0.0)
+            lines.append(f"| {metric} | {score:.2f} | {v:.4f} |")
         lines.append("")
 
     # By task type
@@ -312,6 +389,24 @@ def _write_markdown_report(report: ComparisonReport, path: Path) -> None:
         if report.results.judge_agreement.notes:
             lines.append(f"- {report.results.judge_agreement.notes}")
         lines.append("")
+
+    # Critical issues
+    if report.results.overall.critical_issue_count:
+        lines.append("## Critical Issues")
+        lines.append("")
+        lines.append("| Candidate | Count |")
+        lines.append("|-----------|-------|")
+        for cid, count in sorted(report.results.overall.critical_issue_count.items()):
+            lines.append(f"| {cid} | {count} |")
+        lines.append("")
+
+        # By task breakdown
+        for task_type, agg in report.results.by_task.items():
+            if agg.critical_issue_count:
+                lines.append(f"### {task_type}")
+                for cid, count in sorted(agg.critical_issue_count.items()):
+                    lines.append(f"- {cid}: {count}")
+                lines.append("")
 
     # Notable failures
     failures = report.results.overall.notable_failures

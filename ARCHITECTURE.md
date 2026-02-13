@@ -55,7 +55,7 @@ src/llm_eval/
 │   .jsonl    │    │ (Stage 1) │    │ (Stage 2) │    │(Stage 3) │
 └─────────────┘    └─────┬─────┘    └─────┬─────┘    └────┬─────┘
                          │                │               │
-                  inference.jsonl   autocheck.jsonl  judgements.jsonl
+                  inference-{run_id}.jsonl   autocheck-{run_id}.jsonl  judgements-{run_id}.jsonl
                          │                │               │
                          └────────────────┴───────────────┘
                                           │
@@ -65,7 +65,7 @@ src/llm_eval/
                                    │ (Stage 4)  │
                                    └──────┬─────┘
                                           │
-                              comparison-report.json / .md
+                              comparison-report-{run_id}.json / .md
 ```
 
 各ステージは **前ステージの出力ファイル (JSONL/JSON)** のみに依存します。
@@ -140,6 +140,7 @@ Pairwise と Absolute の両方を実行します。
 - ルーブリック (`rubrics/v1.md`) を全文埋め込み
 - 有効な評価指標リストとスコアリングスケールを提示
 - `response_format: json_object` で JSON 応答を強制
+- `critical_issue` 判定を要求（重大な事実捏造、安全性違反、形式不全、指示無視）
 
 ### Stage 4: Compare (`stages/compare.py`)
 
@@ -154,6 +155,7 @@ Pairwise と Absolute の両方を実行します。
 | **overall.mean_score** | 評価指標ごとの平均スコア |
 | **by_task** | task_type 別の集計 |
 | **by_bucket** | input_length_bucket (S/M/L) 別の集計 |
+| **critical_issue_count** | 候補ごとの重大品質欠陥 (`critical_issue=true`) の件数 |
 | **judge_agreement** | Judge 間の一致率（同一ケース・同一ペアの判定一致度） |
 | **notable_failures** | Autocheck で検出された形式エラー・スキーマ不整合 |
 

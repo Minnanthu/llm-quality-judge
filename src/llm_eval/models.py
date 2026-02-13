@@ -233,6 +233,8 @@ class JudgementRecord(BaseModel):
     targets: list[JudgeTarget]
     scores: Scores
     blinding: BlindingInfo | None = None
+    critical_issue: bool = False
+    critical_issue_candidates: list[str] = Field(default_factory=list)
     rationale: str | None = None
     evidence: list[Evidence] = Field(default_factory=list)
 
@@ -250,7 +252,9 @@ class NotableFailure(BaseModel):
 class AggregateBlock(BaseModel):
     win_rate: dict[str, float] = Field(default_factory=dict)
     mean_score: dict[str, float] = Field(default_factory=dict)
+    score_variance: dict[str, float] = Field(default_factory=dict)
     confidence_intervals: dict[str, Any] = Field(default_factory=dict)
+    critical_issue_count: dict[str, int] = Field(default_factory=dict)
     notable_failures: list[NotableFailure] = Field(default_factory=list)
 
 
@@ -272,6 +276,13 @@ class JudgeSummary(BaseModel):
     rubric_version: str
 
 
+class ReportSummary(BaseModel):
+    total_judgements: int = Field(0, ge=0)
+    valid_judgements: int = Field(0, ge=0)
+    excluded_judgements: int = Field(0, ge=0)
+    repeat_stability: float | None = None
+
+
 class ReportDataset(BaseModel):
     dataset_version: str | None = None
     testcase_count: int = Field(0, ge=0)
@@ -290,4 +301,5 @@ class ComparisonReport(BaseModel):
     candidates: list[CandidateInfo]
     judges: list[JudgeSummary]
     protocol: dict[str, Any]
+    summary: ReportSummary = Field(default_factory=ReportSummary)
     results: Results

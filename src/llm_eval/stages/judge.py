@@ -186,11 +186,21 @@ def _judge_pairwise(
         else:
             winner = raw_winner
         rationale = result.get("rationale")
+        ci_a = bool(result.get("critical_issue_a", False))
+        ci_b = bool(result.get("critical_issue_b", False))
+        critical_issue = ci_a or ci_b
+        ci_candidates: list[str] = []
+        if ci_a:
+            ci_candidates.append(cand_map["A"])
+        if ci_b:
+            ci_candidates.append(cand_map["B"])
 
     except Exception as e:
         per_metric = {}
         winner = "tie"
         rationale = f"Judge error: {e}"
+        critical_issue = False
+        ci_candidates = []
 
     if strict_format:
         strict_score, strict_winner_override = _pairwise_format_compliance_score(
@@ -229,6 +239,8 @@ def _judge_pairwise(
             random_seed=cfg.protocol.blinding.random_seed,
         ),
         scores=Scores(per_metric=per_metric, overall_winner=winner),
+        critical_issue=critical_issue,
+        critical_issue_candidates=ci_candidates,
         rationale=rationale,
     )
 
@@ -269,11 +281,13 @@ def _judge_absolute(
         per_metric = result.get("per_metric", {})
         overall_score = result.get("overall_score")
         rationale = result.get("rationale")
+        critical_issue = bool(result.get("critical_issue", False))
 
     except Exception as e:
         per_metric = {}
         overall_score = None
         rationale = f"Judge error: {e}"
+        critical_issue = False
 
     if strict_format:
         per_metric["format_compliance"] = _absolute_format_compliance_score(tc, inf.output.text)
@@ -296,6 +310,8 @@ def _judge_absolute(
             ),
         ],
         scores=Scores(per_metric=per_metric, overall_score=overall_score),
+        critical_issue=critical_issue,
+        critical_issue_candidates=[inf.candidate_id] if critical_issue else [],
         rationale=rationale,
     )
 

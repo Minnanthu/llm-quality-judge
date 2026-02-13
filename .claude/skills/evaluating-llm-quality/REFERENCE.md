@@ -129,10 +129,10 @@ SKILL.md は薄く保ち、詳細はここに集約します（progressive discl
 
 ## 6. データセット設計（品質比較の土台）
 
-### 6.1 テストケースに必ず入れるもの
-- `task_type`（preprocessing / report_generation / report_qa）
-- `input_length_bucket`（S/M/L）
-- 制約：必須項目、禁止事項、期待形式（JSON schema参照など）
+### 6.1 テストケースに入れるべきもの
+- 必須（schema required）: `task_type`（preprocessing / report_generation / report_qa）
+- 推奨（schema optional）: `input_length_bucket`（S/M/L）
+- 推奨: 制約（必須項目、禁止事項、期待形式（JSON schema参照など））
 
 ### 6.2 分割（リーク防止）
 - `dev`：rubricやプロンプト調整に使う

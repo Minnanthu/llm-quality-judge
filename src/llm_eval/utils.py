@@ -55,3 +55,11 @@ def mean(values: list[float | int]) -> float:
     if not values:
         return 0.0
     return sum(values) / len(values)
+
+
+def variance(values: list[float | int]) -> float:
+    """Compute population variance. Returns 0.0 for fewer than 2 values."""
+    if len(values) < 2:
+        return 0.0
+    m = mean(values)
+    return sum((v - m) ** 2 for v in values) / len(values)
