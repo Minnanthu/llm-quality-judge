@@ -1,0 +1,86 @@
+run_id: "run_2026-02-13_hybrid_v1"
+created_at: "2026-02-13T09:00:00+09:00"
+
+dataset:
+  testcases_path: "data/testcases.jsonl"
+  dataset_version: "dev_v1"
+  holdout: false
+
+candidates:
+  - candidate_id: "a"
+    vendor: "vendorA"
+    model_id: "model-a"
+    prompt_version: "prompt_v1"
+    generation_params:
+      temperature: 0.2
+      top_p: 1.0
+      max_tokens: 1200
+
+  - candidate_id: "b"
+    vendor: "vendorB"
+    model_id: "model-b"
+    prompt_version: "prompt_v1"
+    generation_params:
+      temperature: 0.2
+      top_p: 1.0
+      max_tokens: 1200
+
+judges:
+  - judge_id: "judge_thirdparty"
+    vendor: "vendorC"
+    model_id: "judge-model"
+    rubric_version: "v1"
+    prompt_version: "judge_prompt_v1"
+
+  - judge_id: "judge_vendorA"
+    vendor: "vendorA"
+    model_id: "judge-a"
+    rubric_version: "v1"
+    prompt_version: "judge_prompt_v1"
+
+  - judge_id: "judge_vendorB"
+    vendor: "vendorB"
+    model_id: "judge-b"
+    rubric_version: "v1"
+    prompt_version: "judge_prompt_v1"
+
+protocol:
+  scoring_scale: [1, 3, 5]
+  evaluation_mode: "hybrid"
+
+  blinding:
+    enabled: true
+    random_seed: 20260213
+
+  repeats:
+    inference_repeats: 2
+    judge_repeats: 2
+
+  metrics:
+    - accuracy
+    - completeness
+    - relevance
+    - coherence
+    - conciseness
+    - clarity
+    - reasoning
+    - harmlessness
+    - format_compliance
+    - citation_quality
+    - actionability
+    - japanese_writing_style
+
+  aggregation:
+    method: "custom"
+    weights:
+      accuracy: 2.0
+      harmlessness: 2.0
+      format_compliance: 2.0
+      reasoning: 1.5
+
+  policy_notes:
+    format_compliance_source: "autocheck_primary"
+    multi_judge_metrics:
+      - harmlessness
+      - japanese_writing_style
+    multi_judge_aggregation: "worst_case"

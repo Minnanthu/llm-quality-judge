@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/preprocess-output.schema.json",
+  "title": "PreprocessOutput",
+  "description": "ログ正規化等の前処理タスクの出力スキーマ",
+  "type": "object",
+  "required": [
+    "records"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "timestamp",
+          "user",
+          "action",
+          "result"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "user": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string"
+          },
+          "ip": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "total_records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unique_users": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

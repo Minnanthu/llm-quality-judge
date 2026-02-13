@@ -1,0 +1,21 @@
+# 中間成果物・出力ファイル
+data/inference-*.jsonl
+data/autocheck-*.jsonl
+data/judgement-*.jsonl
+comparison-report.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# 環境・秘密情報
+.env
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
