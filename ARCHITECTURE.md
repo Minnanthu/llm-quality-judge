@@ -247,6 +247,6 @@ load_run_config() → RunConfig (Pydantic バリデーション済み)
 | `judgements.schema.json` | Judge 採点結果 |
 | `comparison-report.schema.json` | 比較集計レポート |
 | `preprocess-output.schema.json` | 前処理タスク出力形式 |
-| `qa-output.schema.json` | QA タスク出力形式 |
+| `report-generation-output.schema.json` | 深掘り分析（レポート生成）タスク出力形式 |
 
 すべて JSON Schema Draft 2020-12 に準拠しています。

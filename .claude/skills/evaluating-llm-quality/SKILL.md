@@ -38,7 +38,11 @@ argument-hint: "[run-config.yaml]"
 `json_schema_ref` は `constraints.output_format` に記載する。
 
 - 例: `constraints.output_format.type: json`
-- 例: `constraints.output_format.json_schema_ref: schemas/qa-output.schema.json`
+- 例: `constraints.output_format.json_schema_ref: schemas/report-generation-output.schema.json`
+
+タスク別の推奨運用:
+
+- `report_generation`: JSON出力 + `json_schema_ref` 指定（厳格検証）
 
 ## Outputs (artifacts)
 - `data/inference-{run_id}.jsonl` : 候補モデルの生成結果（1行=1レコード）

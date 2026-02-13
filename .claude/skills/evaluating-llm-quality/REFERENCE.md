@@ -123,7 +123,7 @@ SKILL.md は薄く保ち、詳細はここに集約します（progressive discl
 - testcase の `constraints.output_format` に `type: json` と `json_schema_ref` がある場合、`format_compliance` は JSON Schema 検証結果を一次判定とする。
 - この条件では Judge は `format_compliance` を採点しない（Judgeへの評価指標から除外）。
 - `json_schema_ref` の記載場所は testcase レコード内の `constraints.output_format.json_schema_ref`。
-- 例: `schemas/preprocess-output.schema.json`, `schemas/qa-output.schema.json`
+- 例: `schemas/preprocess-output.schema.json`, `schemas/report-generation-output.schema.json`
 
 ---
 
@@ -179,6 +179,6 @@ SKILL.md は薄く保ち、詳細はここに集約します（progressive discl
 - `schemas/judgements.schema.json`
 - `schemas/comparison-report.schema.json`
 - `schemas/preprocess-output.schema.json`
-- `schemas/qa-output.schema.json`
+- `schemas/report-generation-output.schema.json`
 - `rubrics/v1.md`
 - `templates/*.md`

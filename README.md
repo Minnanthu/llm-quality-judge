@@ -145,6 +145,10 @@ protocol:
 
 対応タスク種別: `preprocessing` / `report_generation` / `report_qa`
 
+推奨フォーマット運用:
+
+- `report_generation`: JSON + `json_schema_ref`（厳格Schema検証）
+
 ## 出力ファイル
 
 | ファイル | 形式 | 内容 |
