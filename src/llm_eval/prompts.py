@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from warnings import warn
 
 from llm_eval.models import Constraints, JudgeRef, Testcase
 
@@ -21,13 +22,38 @@ RUBRIC_DIRS = [
 ]
 
 
-def _find_file(name: str, dirs: list[Path]) -> str | None:
-    """Search for a file in multiple directories."""
+_TEMPLATE_CACHE: dict[str, str | None] = {}
+_RUBRIC_CACHE: dict[str, str | None] = {}
+_MISSING_TEMPLATES: set[str] = set()
+_MISSING_RUBRICS: set[str] = set()
+
+
+def _load_with_cache(
+    name: str,
+    dirs: list[Path],
+    cache: dict[str, str | None],
+    missing: set[str],
+    kind: str,
+) -> str:
+    """Search for a file with simple cache and warn once on miss."""
+    if name in cache:
+        return cache[name] or ""
+
     for d in dirs:
         path = d / name
         if path.exists():
-            return path.read_text()
-    return None
+            content = path.read_text()
+            cache[name] = content
+            return content
+
+    cache[name] = None
+    if name not in missing:
+        missing.add(name)
+        warn(
+            f"{kind} '{name}' not found in {', '.join(str(d) for d in dirs)}",
+            RuntimeWarning,
+        )
+    return ""
 
 
 def load_template(task_type: str) -> str:
@@ -38,14 +64,24 @@ def load_template(task_type: str) -> str:
         "report_qa": "report_qa.md",
     }
     filename = mapping.get(task_type, f"{task_type}.md")
-    content = _find_file(filename, TEMPLATE_DIRS)
-    return content or ""
+    return _load_with_cache(
+        name=filename,
+        dirs=TEMPLATE_DIRS,
+        cache=_TEMPLATE_CACHE,
+        missing=_MISSING_TEMPLATES,
+        kind="Template",
+    )
 
 
 def load_rubric(version: str) -> str:
     """Load a rubric by version name."""
-    content = _find_file(f"{version}.md", RUBRIC_DIRS)
-    return content or ""
+    return _load_with_cache(
+        name=f"{version}.md",
+        dirs=RUBRIC_DIRS,
+        cache=_RUBRIC_CACHE,
+        missing=_MISSING_RUBRICS,
+        kind="Rubric",
+    )
 
 
 # ── Candidate inference prompt ────────────────────────────

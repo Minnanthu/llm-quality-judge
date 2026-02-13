@@ -15,7 +15,10 @@ from llm_eval.models import (
     JsonSchemaValidation,
     Testcase,
 )
-from llm_eval.schema_validation import validate_output_against_testcase_schema
+from llm_eval.schema_validation import (
+    SchemaValidationResult,
+    validate_output_against_testcase_schema,
+)
 from llm_eval.utils import read_jsonl, write_jsonl
 
 
@@ -61,8 +64,10 @@ def run_autocheck(
 
 def _run_checks(inf: InferenceRecord, tc: Testcase | None) -> Checks:
     """Run all applicable checks on a single inference record."""
-    fmt_check = _check_format_compliance(inf, tc)
-    schema_check = _check_json_schema(inf, tc)
+    schema_result = validate_output_against_testcase_schema(tc, inf.output.text)
+
+    fmt_check = _check_format_compliance(inf, tc, schema_result)
+    schema_check = _check_json_schema(schema_result)
 
     return Checks(
         format_compliance=fmt_check,
@@ -71,7 +76,9 @@ def _run_checks(inf: InferenceRecord, tc: Testcase | None) -> Checks:
 
 
 def _check_format_compliance(
-    inf: InferenceRecord, tc: Testcase | None
+    inf: InferenceRecord,
+    tc: Testcase | None,
+    schema_result: SchemaValidationResult | None,
 ) -> FormatCompliance:
     """Check if output matches the expected format."""
     if not tc or not tc.constraints or not tc.constraints.output_format:
@@ -84,7 +91,6 @@ def _check_format_compliance(
         return FormatCompliance(passed=False, details="Empty output")
 
     if expected == "json":
-        schema_result = validate_output_against_testcase_schema(tc, output_text)
         if schema_result is not None:
             if schema_result.passed:
                 return FormatCompliance(passed=True, details="Valid JSON and schema compliant")
@@ -111,10 +117,9 @@ def _check_format_compliance(
 
 
 def _check_json_schema(
-    inf: InferenceRecord, tc: Testcase | None
+    schema_result: SchemaValidationResult | None,
 ) -> JsonSchemaValidation | None:
     """Validate output against a referenced JSON schema if applicable."""
-    schema_result = validate_output_against_testcase_schema(tc, inf.output.text)
     if schema_result is None:
         return None
 

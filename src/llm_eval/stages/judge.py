@@ -51,6 +51,18 @@ def run_judge(
     for idx, inf in enumerate(inferences):
         inf_by_tc.setdefault(inf.testcase_id, []).append((idx, inf))
 
+    # For pairwise判定は候補ペアごとに一度に絞り、リピート同士の二乗爆発を防ぐ
+    pairwise_inf_by_tc: dict[str, list[tuple[int, InferenceRecord]]] = {}
+    for tc_id, inf_list in inf_by_tc.items():
+        seen_candidates: set[str] = set()
+        unique_list: list[tuple[int, InferenceRecord]] = []
+        for idx, inf in inf_list:
+            if inf.candidate_id in seen_candidates:
+                continue
+            seen_candidates.add(inf.candidate_id)
+            unique_list.append((idx, inf))
+        pairwise_inf_by_tc[tc_id] = unique_list
+
     out = Path(output_path or f"data/judgements-{cfg.run_id}.jsonl")
     records: list[JudgementRecord] = []
 
@@ -58,7 +70,7 @@ def run_judge(
     rng = random.Random(cfg.protocol.blinding.random_seed or 42)
 
     # Calculate total work
-    total = _estimate_total(cfg, inf_by_tc)
+    total = _estimate_total(cfg, pairwise_inf_by_tc, inf_by_tc)
 
     with Progress() as progress:
         task = progress.add_task("Judging", total=total)
@@ -74,7 +86,8 @@ def run_judge(
                 for repeat in range(cfg.protocol.repeats.judge_repeats):
                     if mode in ("pairwise", "hybrid"):
                         # All pairs
-                        for (idx_a, inf_a), (idx_b, inf_b) in combinations(inf_list, 2):
+                        pairwise_list = pairwise_inf_by_tc.get(tc_id, [])
+                        for (idx_a, inf_a), (idx_b, inf_b) in combinations(pairwise_list, 2):
                             rec = _judge_pairwise(
                                 cfg=cfg,
                                 tc=tc,
@@ -108,17 +121,24 @@ def run_judge(
     return out
 
 
-def _estimate_total(cfg: RunConfig, inf_by_tc: dict) -> int:
-    """Estimate total number of judge calls."""
+def _estimate_total(
+    cfg: RunConfig,
+    pairwise_inf_by_tc: dict,
+    absolute_inf_by_tc: dict,
+) -> int:
+    """Estimate total number of judge calls (pairwise uses deduped candidates)."""
     total = 0
     mode = cfg.protocol.evaluation_mode
     n_judges = len(cfg.judges)
     repeats = cfg.protocol.repeats.judge_repeats
 
-    for inf_list in inf_by_tc.values():
+    for inf_list in pairwise_inf_by_tc.values():
         n = len(inf_list)
         if mode in ("pairwise", "hybrid"):
             total += n * (n - 1) // 2 * n_judges * repeats
+
+    for inf_list in absolute_inf_by_tc.values():
+        n = len(inf_list)
         if mode in ("absolute", "hybrid"):
             total += n * n_judges * repeats
 
