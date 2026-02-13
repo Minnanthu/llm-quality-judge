@@ -1,8 +1,8 @@
 # 中間成果物・出力ファイル
 data/inference-*.jsonl
 data/autocheck-*.jsonl
-data/judgement-*.jsonl
-comparison-report.*
+data/judgements-*.jsonl
+data/comparison-report-*
 
 # Python
 __pycache__/
@@ -11,6 +11,10 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+dist/
+
+# uv
+uv.lock
 
 # 環境・秘密情報
 .env

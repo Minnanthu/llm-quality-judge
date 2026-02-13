@@ -27,20 +27,19 @@ argument-hint: "[run-config.yaml]"
 - `data/testcases.jsonl`（テストケース。タスク種別、入力、制約、期待形式など）
 
 ### Required testcase fields (Quality)
-`data/testcases.jsonl` は少なくとも以下を持つこと。
+`data/testcases.jsonl` は少なくとも以下を持つこと（`schemas/testcases.schema.json` 準拠）。
 
-- `task_type`: `preprocess` / `deep_analysis` / `qa`
-- `input`: 評価対象入力
-- `constraints`: 禁止事項、制約、注意点
-- `expected_format`: 期待フォーマット定義（JSON schema等）
-- `evaluation_axes`: ケース単位の評価観点（省略時はrun-config既定）
-- `meta`: 難易度、入力長バケット、備考
+- `testcase_id`: ケースの一意ID
+- `task_type`: `preprocessing` / `report_generation` / `report_qa`
+- `input`: 評価対象入力（オブジェクト）
+- `constraints`: 制約（`required_points`, `forbidden_points`, `output_format`, `citation_policy`）
+- `metadata`: 難易度 (`difficulty`), 入力長バケット (`input_length_bucket`: S/M/L), `tags`
 
 ## Outputs (artifacts)
-- `inference.jsonl` : 候補モデルの生成結果（1行=1レコード）
-- `autocheck.jsonl` : 自動検査結果（形式準拠、schema検証など）
-- `judgements.jsonl` : Judgeごとの採点結果（1行=1判定）
-- `comparison-report.json` / `comparison-report.md` : 集約結果
+- `data/inference-{run_id}.jsonl` : 候補モデルの生成結果（1行=1レコード）
+- `data/autocheck-{run_id}.jsonl` : 自動検査結果（形式準拠、schema検証など）
+- `data/judgements-{run_id}.jsonl` : Judgeごとの採点結果（1行=1判定）
+- `data/comparison-report-{run_id}.json` / `.md` : 集約結果
 
 各artifactは `schemas/*.schema.json` に準拠すること。
 
@@ -49,23 +48,27 @@ argument-hint: "[run-config.yaml]"
 方式の改善は、原則として **run-config と judge rubric** の更新で行い、artifactスキーマは安定させる。
 
 ### Required run-config fields (Quality)
-`run-config.yaml` には `quality_protocol` セクションを設け、以下を定義する。
+`run-config.yaml` は `schemas/run-config.schema.json` に準拠し、以下のトップレベル構造を持つ。
 
-- `protocol_type`: `pairwise`（既定）または `absolute`
-- `judge_models`: Judgeモデル配列（固定ID）
-- `judge_prompt_version`: Judgeプロンプトの版
-- `n_repeats_per_case`: 同一ケース反復回数（分散確認用）
-- `randomize_ab_order`: A/B提示順のランダム化有無
-- `score_axes`: 軸定義（後述の必須軸を含む）
-- `aggregation`: 集約方式（多数決、重み付き平均、同点処理）
+- `run_id`: 実行の一意ID
+- `candidates`: 候補モデル配列（`candidate_id`, `vendor`, `model_id`, `generation_params` 等）
+- `judges`: Judgeモデル配列（`judge_id`, `vendor`, `model_id`, `rubric_version` 等）
+- `dataset`: テストケースファイルのパスとバージョン
+- `protocol`: 評価プロトコル設定
+  - `evaluation_mode`: `pairwise` / `absolute` / `hybrid`
+  - `blinding`: `enabled` (bool), `random_seed` (int)
+  - `repeats`: `inference_repeats`, `judge_repeats`
+  - `metrics`: 評価指標リスト
+  - `aggregation`: `method` (`mean`/`majority_vote`/`worst_case`/`custom`), `weights`
 
-### Required score axes (default)
-`score_axes` には、特段の理由がない限り以下を含める。
+### Required metrics (default)
+`protocol.metrics` には、特段の理由がない限り以下を含める。
 
-- `correctness`（事実性・整合性）
-- `format_compliance`（指定フォーマット遵守）
-- `safety_policy`（不適切出力、注入耐性）
-- `evidence`（根拠の明示と整合）
+**Core 9（全タスク共通）:**
+`accuracy`, `completeness`, `relevance`, `coherence`, `conciseness`, `clarity`, `harmlessness`, `format_compliance`, `reasoning`
+
+**Optional 3:**
+`citation_quality`, `actionability`, `japanese_writing_style`
 
 ## Judge policy (for fairness)
 - 同一run内で Judgeモデルと Judgeプロンプトは固定する。
@@ -90,7 +93,7 @@ argument-hint: "[run-config.yaml]"
 `judgements.jsonl` または別途レビュー記録で `critical_issue=true` として機械可読に残す。
 
 ## Comparison report minimums
-`comparison-report.json` / `.md` は最低限以下を出力する。
+`data/comparison-report-{run_id}.json` / `.md` は最低限以下を出力する。
 
 - ケース総数、有効判定数、除外数
 - モデル別の勝率/敗率/同点率

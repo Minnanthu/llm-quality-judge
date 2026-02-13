@@ -11,7 +11,7 @@ SKILL.md は薄く保ち、詳細はここに集約します（progressive discl
 測定方式を改善しても壊れないよう、以下は原則固定（互換維持）します。
 
 - **artifact（中間成果物）のフォーマット**
-  - `inference.jsonl` / `autocheck.jsonl` / `judgements.jsonl` / `comparison-report.json`
+  - `data/inference-{run_id}.jsonl` / `data/autocheck-{run_id}.jsonl` / `data/judgements-{run_id}.jsonl` / `data/comparison-report-{run_id}.json`
   - それぞれ `schemas/*.schema.json` に準拠
 - **バージョニングと追跡可能性**
   - `run_id`, `dataset_version`, `prompt_version`, `rubric_version`, `params_hash`, `input_hash`
@@ -54,21 +54,21 @@ SKILL.md は薄く保ち、詳細はここに集約します（progressive discl
 ### 2.1 ステージと責務
 1) **Inference（生成）**
 - 入力：`data/testcases.jsonl`, `configs/run-config.yaml`
-- 出力：`inference.jsonl`（候補モデル×テストケース×反復）
+- 出力：`data/inference-{run_id}.jsonl`（候補モデル×テストケース×反復）
 
 2) **Auto-check（機械検査）**
-- 入力：`inference.jsonl` + testcase constraints
-- 出力：`autocheck.jsonl`
+- 入力：`data/inference-{run_id}.jsonl` + testcase constraints
+- 出力：`data/autocheck-{run_id}.jsonl`
 - 目的：`format_compliance` 等を **Judgeから切り離し**、不公平を減らす
 
 3) **Judge（採点）**
 - 入力：testcase + inference outputs +（必要なら）autocheck結果
-- 出力：`judgements.jsonl`（Judgeごとに独立）
+- 出力：`data/judgements-{run_id}.jsonl`（Judgeごとに独立）
 - 重要：A/Bのブラインド提示・提示順ランダムをサポート
 
 4) **Compare/Aggregate（集約・比較）**
-- 入力：`judgements.jsonl`（複数Judgeを含む）+ `configs/run-config.yaml`
-- 出力：`comparison-report.json` +（任意で）`comparison-report.md`
+- 入力：`data/judgements-{run_id}.jsonl`（複数Judgeを含む）+ `configs/run-config.yaml`
+- 出力：`data/comparison-report-{run_id}.json` +（任意で）`.md`
 
 ---
 
@@ -144,7 +144,7 @@ SKILL.md は薄く保ち、詳細はここに集約します（progressive discl
 
 ### 7.1 すべてのrunで残すもの
 - `configs/run-config.yaml` のコピー（結果フォルダに固定保存）
-- `inference.jsonl` / `autocheck.jsonl` / `judgements.jsonl` / `comparison-report.json`
+- `data/inference-{run_id}.jsonl` / `data/autocheck-{run_id}.jsonl` / `data/judgements-{run_id}.jsonl` / `data/comparison-report-{run_id}.json`
 - 主要hash：`prompt_hash`, `params_hash`, `input_hash`
 
 ### 7.2 エラー取り扱い
@@ -167,10 +167,12 @@ SKILL.md は薄く保ち、詳細はここに集約します（progressive discl
 
 ## 9. ファイル参照（ナビ）
 - `schemas/run-config.schema.json`
-- `schemas/testcase.schema.json`
+- `schemas/testcases.schema.json`
 - `schemas/inference-record.schema.json`
 - `schemas/autocheck-record.schema.json`
-- `schemas/judgement-record.schema.json`
+- `schemas/judgements.schema.json`
 - `schemas/comparison-report.schema.json`
+- `schemas/preprocess-output.schema.json`
+- `schemas/qa-output.schema.json`
 - `rubrics/v1.md`
 - `templates/*.md`
