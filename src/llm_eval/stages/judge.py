@@ -23,6 +23,10 @@ from llm_eval.models import (
     Testcase,
 )
 from llm_eval.prompts import build_absolute_judge_prompt, build_pairwise_judge_prompt
+from llm_eval.schema_validation import (
+    get_json_schema_ref,
+    validate_output_against_testcase_schema,
+)
 from llm_eval.utils import read_jsonl, write_jsonl
 
 
@@ -134,6 +138,9 @@ def _judge_pairwise(
     inf_path: str,
 ) -> JudgementRecord:
     """Run a pairwise judge evaluation."""
+    strict_format = _should_use_strict_format_compliance(cfg.protocol.metrics, tc)
+    judge_metrics = _filter_llm_metrics(cfg.protocol.metrics, strict_format)
+
     # Blinding: randomize presentation order
     blinding_enabled = cfg.protocol.blinding.enabled
     if blinding_enabled and rng.random() < 0.5:
@@ -153,7 +160,7 @@ def _judge_pairwise(
         output_b=out_second,
         label_a=label_first,
         label_b=label_second,
-        metrics=cfg.protocol.metrics,
+        metrics=judge_metrics,
         rubric_version=judge_ref.rubric_version,
         scoring_scale=cfg.protocol.scoring_scale,
     )
@@ -184,6 +191,16 @@ def _judge_pairwise(
         per_metric = {}
         winner = "tie"
         rationale = f"Judge error: {e}"
+
+    if strict_format:
+        strict_score, strict_winner_override = _pairwise_format_compliance_score(
+            tc,
+            inf_a,
+            inf_b,
+        )
+        per_metric["format_compliance"] = strict_score
+        if strict_winner_override is not None:
+            winner = strict_winner_override
 
     return JudgementRecord(
         run_id=cfg.run_id,
@@ -226,11 +243,14 @@ def _judge_absolute(
     inf_path: str,
 ) -> JudgementRecord:
     """Run an absolute (single-answer) judge evaluation."""
+    strict_format = _should_use_strict_format_compliance(cfg.protocol.metrics, tc)
+    judge_metrics = _filter_llm_metrics(cfg.protocol.metrics, strict_format)
+
     messages = build_absolute_judge_prompt(
         testcase=tc,
         output_text=inf.output.text,
         candidate_label=inf.candidate_id,
-        metrics=cfg.protocol.metrics,
+        metrics=judge_metrics,
         rubric_version=judge_ref.rubric_version,
         scoring_scale=cfg.protocol.scoring_scale,
     )
@@ -255,6 +275,9 @@ def _judge_absolute(
         overall_score = None
         rationale = f"Judge error: {e}"
 
+    if strict_format:
+        per_metric["format_compliance"] = _absolute_format_compliance_score(tc, inf.output.text)
+
     return JudgementRecord(
         run_id=cfg.run_id,
         testcase_id=tc.testcase_id,
@@ -275,3 +298,45 @@ def _judge_absolute(
         scores=Scores(per_metric=per_metric, overall_score=overall_score),
         rationale=rationale,
     )
+
+
+def _filter_llm_metrics(metrics: list[str], strict_format_compliance: bool) -> list[str]:
+    if not strict_format_compliance:
+        return metrics
+    return [m for m in metrics if m != "format_compliance"]
+
+
+def _should_use_strict_format_compliance(metrics: list[str], tc: Testcase) -> bool:
+    if "format_compliance" not in metrics:
+        return False
+    return get_json_schema_ref(tc) is not None
+
+
+def _absolute_format_compliance_score(tc: Testcase, output_text: str) -> int:
+    result = validate_output_against_testcase_schema(tc, output_text)
+    if result is None:
+        return 1
+    return 5 if result.passed else 1
+
+
+def _pairwise_format_compliance_score(
+    tc: Testcase,
+    inf_a: InferenceRecord,
+    inf_b: InferenceRecord,
+) -> tuple[int, str | None]:
+    result_a = validate_output_against_testcase_schema(tc, inf_a.output.text)
+    result_b = validate_output_against_testcase_schema(tc, inf_b.output.text)
+
+    passed_a = bool(result_a and result_a.passed)
+    passed_b = bool(result_b and result_b.passed)
+
+    if passed_a and passed_b:
+        return 5, None
+    if passed_a and not passed_b:
+        return 3, inf_a.candidate_id
+    if passed_b and not passed_a:
+        return 3, inf_b.candidate_id
+    if (not passed_a) and (not passed_b):
+        return 1, None
+
+    return 1, None

@@ -119,6 +119,12 @@ SKILL.md は薄く保ち、詳細はここに集約します（progressive discl
 - citationの形式（参照ID/URL/箇所）も可能なら機械検査を混ぜる
 - Auto-checkは「落とす」のではなく、Judge/Reportに **失敗理由を運ぶ**のが運用しやすい
 
+### 5.1 `format_compliance` の厳格判定ルール
+- testcase の `constraints.output_format` に `type: json` と `json_schema_ref` がある場合、`format_compliance` は JSON Schema 検証結果を一次判定とする。
+- この条件では Judge は `format_compliance` を採点しない（Judgeへの評価指標から除外）。
+- `json_schema_ref` の記載場所は testcase レコード内の `constraints.output_format.json_schema_ref`。
+- 例: `schemas/preprocess-output.schema.json`, `schemas/qa-output.schema.json`
+
 ---
 
 ## 6. データセット設計（品質比較の土台）

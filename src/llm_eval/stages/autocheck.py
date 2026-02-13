@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-
-import jsonschema
 from rich.progress import Progress
 
 from llm_eval.config import load_run_config
@@ -17,6 +15,7 @@ from llm_eval.models import (
     JsonSchemaValidation,
     Testcase,
 )
+from llm_eval.schema_validation import validate_output_against_testcase_schema
 from llm_eval.utils import read_jsonl, write_jsonl
 
 
@@ -85,6 +84,14 @@ def _check_format_compliance(
         return FormatCompliance(passed=False, details="Empty output")
 
     if expected == "json":
+        schema_result = validate_output_against_testcase_schema(tc, output_text)
+        if schema_result is not None:
+            if schema_result.passed:
+                return FormatCompliance(passed=True, details="Valid JSON and schema compliant")
+            return FormatCompliance(
+                passed=False,
+                details=f"Schema validation failed: {'; '.join(schema_result.errors[:3])}",
+            )
         try:
             json.loads(output_text)
             return FormatCompliance(passed=True, details="Valid JSON")
@@ -107,52 +114,12 @@ def _check_json_schema(
     inf: InferenceRecord, tc: Testcase | None
 ) -> JsonSchemaValidation | None:
     """Validate output against a referenced JSON schema if applicable."""
-    if not tc or not tc.constraints or not tc.constraints.output_format:
+    schema_result = validate_output_against_testcase_schema(tc, inf.output.text)
+    if schema_result is None:
         return None
-
-    schema_ref = tc.constraints.output_format.json_schema_ref
-    if not schema_ref:
-        return None
-
-    # Try to load the schema file
-    schema_path = Path(schema_ref)
-    if not schema_path.exists():
-        return JsonSchemaValidation(
-            schema_ref=schema_ref,
-            passed=False,
-            errors=[f"Schema file not found: {schema_ref}"],
-        )
-
-    try:
-        schema = json.loads(schema_path.read_text())
-    except json.JSONDecodeError as e:
-        return JsonSchemaValidation(
-            schema_ref=schema_ref,
-            passed=False,
-            errors=[f"Invalid schema file: {e}"],
-        )
-
-    # Parse the output as JSON
-    try:
-        data = json.loads(inf.output.text.strip())
-    except json.JSONDecodeError:
-        return JsonSchemaValidation(
-            schema_ref=schema_ref,
-            passed=False,
-            errors=["Output is not valid JSON"],
-        )
-
-    # Validate against schema
-    validator = jsonschema.Draft202012Validator(schema)
-    errors = list(validator.iter_errors(data))
-
-    if not errors:
-        return JsonSchemaValidation(
-            schema_ref=schema_ref, passed=True, errors=[]
-        )
 
     return JsonSchemaValidation(
-        schema_ref=schema_ref,
-        passed=False,
-        errors=[f"{e.json_path}: {e.message}" for e in errors[:10]],
+        schema_ref=schema_result.schema_ref,
+        passed=schema_result.passed,
+        errors=schema_result.errors,
     )

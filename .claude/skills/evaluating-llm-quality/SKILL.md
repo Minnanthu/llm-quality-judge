@@ -35,6 +35,11 @@ argument-hint: "[run-config.yaml]"
 - `constraints`: 制約（`required_points`, `forbidden_points`, `output_format`, `citation_policy`）
 - `metadata`: 難易度 (`difficulty`), 入力長バケット (`input_length_bucket`: S/M/L), `tags`
 
+`json_schema_ref` は `constraints.output_format` に記載する。
+
+- 例: `constraints.output_format.type: json`
+- 例: `constraints.output_format.json_schema_ref: schemas/qa-output.schema.json`
+
 ## Outputs (artifacts)
 - `data/inference-{run_id}.jsonl` : 候補モデルの生成結果（1行=1レコード）
 - `data/autocheck-{run_id}.jsonl` : 自動検査結果（形式準拠、schema検証など）
@@ -75,6 +80,7 @@ argument-hint: "[run-config.yaml]"
 - 候補出力はブラインド化し、`answer_a` / `answer_b` として提示する。
 - Judge出力は「勝者/同点」「軸別スコア」「理由」を必須とする。
 - 可能な限り自動判定を優先し、Judge裁量のみで決まる項目を減らす。
+- `format_compliance` は、`protocol.metrics` に含まれ、かつ testcase が `output_format.type=json` と `json_schema_ref` を持つ場合、LLM JudgeではなくJSON Schema厳格検証結果を採用する。
 
 ## Safety / Reproducibility
 - ブラインド（回答1/回答2）と順序ランダム化をサポートする。
