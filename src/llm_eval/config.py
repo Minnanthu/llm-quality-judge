@@ -6,9 +6,13 @@ import os
 from pathlib import Path
 
 import yaml
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 
 from llm_eval.models import RunConfig
+
+# Load .env into os.environ so resolve_vendor_env() can access all keys
+load_dotenv()
 
 
 class EnvConfig(BaseSettings):
