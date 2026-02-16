@@ -173,14 +173,22 @@ def _compute_aggregate(
                 weighted_overall[cid] = round(score_sum / w_sum, 2)
 
     # Aggregate metric scores according to method
+    # - mean: simple arithmetic mean (default)
+    # - majority_vote: per-metric scores still use mean; majority_vote affects
+    #   winner determination at the testcase level, not per-metric averaging.
+    # - worst_case: minimum score per metric per candidate
+    # - custom: reserved for future extension; falls back to mean
     if method == "worst_case":
-        # Use minimum score per metric per candidate
         mean_score: dict[str, dict[str, float]] = {
             m: {cid: round(min(scores), 2) for cid, scores in by_cid.items()}
             for m, by_cid in metric_scores.items()
         }
     else:
-        # Default: mean (also used for majority_vote base scores)
+        if method not in ("mean", "majority_vote", "custom"):
+            import logging
+            logging.getLogger(__name__).warning(
+                "Unknown aggregation method '%s'; falling back to mean", method
+            )
         mean_score: dict[str, dict[str, float]] = {
             m: {cid: round(mean(scores), 2) for cid, scores in by_cid.items()}
             for m, by_cid in metric_scores.items()
