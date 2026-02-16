@@ -183,7 +183,7 @@ protocol:
 | actionability | 実用性 | report_generation |
 | japanese_writing_style | 日本語の流暢さ | 全タスク |
 
-各指標は **1 (Poor) / 3 (OK) / 5 (Excellent)** の 3 段階で採点されます。
+各指標は **1 (Poor) / 3 (OK) / 5 (Excellent)** をアンカーとする 5 段階（中間値 2, 4 も許容）で採点されます。
 ルーブリック詳細: `.claude/skills/evaluating-llm-quality/rubrics/v1.md`
 
 ## ディレクトリ構成

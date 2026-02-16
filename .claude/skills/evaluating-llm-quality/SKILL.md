@@ -27,7 +27,7 @@ argument-hint: "[run-config.yaml]"
 - `data/testcases.jsonl`（テストケース。タスク種別、入力、制約、期待形式など）
 
 ### Required testcase fields (Quality)
-`data/testcases.jsonl` は `schemas/testcases.schema.json` に準拠する。
+`data/testcases.jsonl` は `schemas/testcase.schema.json` に準拠する。
 
 **必須（schema required）:**
 - `testcase_id`: ケースの一意ID
@@ -96,7 +96,7 @@ argument-hint: "[run-config.yaml]"
 
 ## Safety / Reproducibility
 - ブラインド（回答1/回答2）と順序ランダム化をサポートする。
-- run_id / prompt_version / params_hash を必ず記録し、再実行可能にする。
+- run_id / prompt_version / input_hash を必ず記録し、再実行可能にする。
 - 可能な限り“自動判定（format_compliance等）”を優先し、Judge裁量を減らす。
 
 ## Qualitative review (human gate)

@@ -14,7 +14,7 @@ SKILL.md は薄く保ち、詳細はここに集約します（progressive discl
   - `data/inference-{run_id}.jsonl` / `data/autocheck-{run_id}.jsonl` / `data/judgements-{run_id}.jsonl` / `data/comparison-report-{run_id}.json`
   - それぞれ `schemas/*.schema.json` に準拠
 - **バージョニングと追跡可能性**
-  - `run_id`, `dataset_version`, `prompt_version`, `rubric_version`, `params_hash`, `input_hash`
+  - `run_id`, `dataset_version`, `prompt_version`, `rubric_version`, `prompt_hash`, `input_hash`
 - **役割分離**
   - Inference → Auto-check → Judge → Compare/Aggregate
 
@@ -151,7 +151,7 @@ SKILL.md は薄く保ち、詳細はここに集約します（progressive discl
 ### 7.1 すべてのrunで残すもの
 - `configs/run-config.yaml` のコピー（結果フォルダに固定保存）
 - `data/inference-{run_id}.jsonl` / `data/autocheck-{run_id}.jsonl` / `data/judgements-{run_id}.jsonl` / `data/comparison-report-{run_id}.json`
-- 主要hash：`prompt_hash`, `params_hash`, `input_hash`
+- 主要hash：`prompt_hash`, `input_hash`
 
 ### 7.2 エラー取り扱い
 - 生成失敗（timeout/429/5xx）やパース失敗は欠損として記録し、成功率・欠損率を必ず出す
@@ -173,10 +173,10 @@ SKILL.md は薄く保ち、詳細はここに集約します（progressive discl
 
 ## 9. ファイル参照（ナビ）
 - `schemas/run-config.schema.json`
-- `schemas/testcases.schema.json`
+- `schemas/testcase.schema.json`
 - `schemas/inference-record.schema.json`
 - `schemas/autocheck-record.schema.json`
-- `schemas/judgements.schema.json`
+- `schemas/judgement-record.schema.json`
 - `schemas/comparison-report.schema.json`
 - `schemas/preprocess-output.schema.json`
 - `schemas/report-generation-output.schema.json`

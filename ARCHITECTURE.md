@@ -188,11 +188,11 @@ vendor 名 → create_client() → OpenAI or AzureOpenAI インスタンス
 
 | Pydantic モデル | 対応スキーマ | 用途 |
 |----------------|-------------|------|
-| `Testcase` | `testcases.schema.json` | テストケース定義 |
+| `Testcase` | `testcase.schema.json` | テストケース定義 |
 | `RunConfig` | `run-config.schema.json` | 評価プロトコル設定 |
 | `InferenceRecord` | `inference-record.schema.json` | 推論結果レコード |
 | `AutoCheckRecord` | `autocheck-record.schema.json` | 自動チェック結果 |
-| `JudgementRecord` | `judgements.schema.json` | Judge 採点結果 |
+| `JudgementRecord` | `judgement-record.schema.json` | Judge 採点結果 |
 | `ComparisonReport` | `comparison-report.schema.json` | 比較集計レポート |
 
 バリデーションは入出力の両方で行われ、スキーマ不整合を早期に検出します。
@@ -245,10 +245,10 @@ load_run_config() → RunConfig (Pydantic バリデーション済み)
 | スキーマファイル | 概要 |
 |-----------------|------|
 | `run-config.schema.json` | 評価プロトコル設定 |
-| `testcases.schema.json` | テストケース定義 |
+| `testcase.schema.json` | テストケース定義 |
 | `inference-record.schema.json` | 推論結果 |
 | `autocheck-record.schema.json` | 自動チェック結果 |
-| `judgements.schema.json` | Judge 採点結果 |
+| `judgement-record.schema.json` | Judge 採点結果 |
 | `comparison-report.schema.json` | 比較集計レポート |
 | `preprocess-output.schema.json` | 前処理タスク出力形式 |
 | `report-generation-output.schema.json` | 深掘り分析（レポート生成）タスク出力形式 |

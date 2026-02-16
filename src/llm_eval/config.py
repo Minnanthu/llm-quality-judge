@@ -27,9 +27,31 @@ class EnvConfig(BaseSettings):
 
 
 def load_run_config(path: str | Path) -> RunConfig:
-    """Load and validate a run-config YAML file."""
+    """Load and validate a run-config YAML file.
+
+    Validates against the JSON Schema first, then against the Pydantic model.
+    """
+    import json
+
+    import jsonschema
+
     with open(path) as f:
         raw = yaml.safe_load(f)
+
+    # JSON Schema validation (SKILL.md requirement)
+    schema_path = (
+        Path(__file__).resolve().parents[2]
+        / ".claude"
+        / "skills"
+        / "evaluating-llm-quality"
+        / "schemas"
+        / "run-config.schema.json"
+    )
+    if schema_path.exists():
+        with open(schema_path) as sf:
+            schema = json.load(sf)
+        jsonschema.validate(instance=raw, schema=schema)
+
     return RunConfig.model_validate(raw)
 
 

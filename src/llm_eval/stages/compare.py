@@ -125,8 +125,13 @@ def _compute_aggregate(
     method: str = "mean",
 ) -> AggregateBlock:
     """Compute aggregate stats across all judgements."""
+    import math
+
+    from llm_eval.utils import variance as _variance
+
     # Win rate (pairwise only)
     win_counts: dict[str, int] = defaultdict(int)
+    loss_counts: dict[str, int] = defaultdict(int)
     tie_count = 0
     pairwise_total = 0
 
@@ -138,11 +143,17 @@ def _compute_aggregate(
                 tie_count += 1
             else:
                 win_counts[winner] += 1
+                # Count losses for all other candidates in this judgement
+                for t in jdg.targets:
+                    if t.candidate_id != winner:
+                        loss_counts[t.candidate_id] += 1
 
     win_rate: dict[str, float] = {}
+    loss_rate: dict[str, float] = {}
     if pairwise_total > 0:
         for cid in candidate_ids:
             win_rate[cid] = round(win_counts[cid] / pairwise_total, 4)
+            loss_rate[cid] = round(loss_counts[cid] / pairwise_total, 4)
         win_rate["tie"] = round(tie_count / pairwise_total, 4)
 
     # Mean score per metric per candidate (absolute judgements only)
@@ -194,6 +205,25 @@ def _compute_aggregate(
             for m, by_cid in metric_scores.items()
         }
 
+    # Confidence intervals (95% CI via standard error) per metric per candidate
+    confidence_intervals: dict[str, dict[str, dict[str, float]]] = {}
+    for m, by_cid in metric_scores.items():
+        ci_by_cid: dict[str, dict[str, float]] = {}
+        for cid, scores in by_cid.items():
+            n = len(scores)
+            if n >= 2:
+                avg = mean(scores)
+                var = _variance(scores)
+                se = math.sqrt(var / n)
+                ci_by_cid[cid] = {
+                    "mean": round(avg, 4),
+                    "lower": round(avg - 1.96 * se, 4),
+                    "upper": round(avg + 1.96 * se, 4),
+                    "n": n,
+                }
+        if ci_by_cid:
+            confidence_intervals[m] = ci_by_cid
+
     # Critical issue count per candidate (using per-candidate tracking)
     ci_counts: dict[str, int] = defaultdict(int)
     for jdg in judgements:
@@ -226,8 +256,10 @@ def _compute_aggregate(
 
     return AggregateBlock(
         win_rate=win_rate,
+        loss_rate=loss_rate,
         mean_score=mean_score,
         weighted_overall=weighted_overall,
+        confidence_intervals=confidence_intervals,
         critical_issue_count=critical_issue_count,
         notable_failures=failures,
     )
@@ -403,12 +435,17 @@ def _write_markdown_report(report: ComparisonReport, path: Path) -> None:
         lines.append("> 評価視点が異なるため、特定の指標スコアが高くても Win Rate で負ける（あるいはその逆）といった結果が生じ得ます。")
         lines.append("")
 
-        lines.append("### Win Rate")
+        lines.append("### Win Rate / Loss Rate")
         lines.append("同じ評価指標 (Rubric) を基準としつつ、各候補の回答を並べて「どちらがより優れているか」を相対的に比較 (Pairwise判定) した結果です。")
         lines.append("テストケース数が少ない場合、1件の判定が全体に大きく影響するため、トレンドを把握するための参考値として参照してください。")
         lines.append("")
-        for cid, rate in report.results.overall.win_rate.items():
-            lines.append(f"- {cid}: {rate:.1%}")
+        lines.append("| Candidate | Win | Loss | Tie |")
+        lines.append("|-----------|-----|------|-----|")
+        tie_rate_val = report.results.overall.win_rate.get("tie", 0.0)
+        for cid in [c.candidate_id for c in report.candidates]:
+            w = report.results.overall.win_rate.get(cid, 0.0)
+            l = report.results.overall.loss_rate.get(cid, 0.0)
+            lines.append(f"| {cid} | {w:.1%} | {l:.1%} | {tie_rate_val:.1%} |")
         lines.append("")
 
     if report.results.overall.mean_score:
@@ -426,6 +463,26 @@ def _write_markdown_report(report: ComparisonReport, path: Path) -> None:
         for metric, by_cid in sorted(report.results.overall.mean_score.items()):
             vals = " | ".join(f"{by_cid.get(c, 0.0):.2f}" for c in cids)
             lines.append(f"| {metric} | {vals} |")
+        lines.append("")
+
+    if report.results.overall.confidence_intervals:
+        cids = [c.candidate_id for c in report.candidates]
+        lines.append("### Confidence Intervals (95%)")
+        lines.append("各指標の 95% 信頼区間（平均 ± 1.96×SE）。")
+        lines.append("")
+        header = "| Metric | " + " | ".join(cids) + " |"
+        sep = "|--------" + "|------" * len(cids) + "|"
+        lines.append(header)
+        lines.append(sep)
+        for metric, by_cid in sorted(report.results.overall.confidence_intervals.items()):
+            vals = []
+            for c in cids:
+                ci = by_cid.get(c)
+                if ci:
+                    vals.append(f"{ci['mean']:.2f} [{ci['lower']:.2f}, {ci['upper']:.2f}]")
+                else:
+                    vals.append("—")
+            lines.append(f"| {metric} | {' | '.join(vals)} |")
         lines.append("")
 
     if report.results.overall.weighted_overall:

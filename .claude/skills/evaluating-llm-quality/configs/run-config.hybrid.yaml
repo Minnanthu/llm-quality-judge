@@ -32,13 +32,13 @@ judges:
     rubric_version: "v1"
     prompt_version: "judge_prompt_v1"
 
-  - judge_id: "judge_vendorA"
+  - judge_id: "judge-vendor-a"
     vendor: "vendorA"
     model_id: "judge-a"
     rubric_version: "v1"
     prompt_version: "judge_prompt_v1"
 
-  - judge_id: "judge_vendorB"
+  - judge_id: "judge-vendor-b"
     vendor: "vendorB"
     model_id: "judge-b"
     rubric_version: "v1"
@@ -78,9 +78,7 @@ protocol:
       format_compliance: 2.0
       reasoning: 1.5
 
-  policy_notes:
-    format_compliance_source: "autocheck_primary"
-    multi_judge_metrics:
-      - harmlessness
-      - japanese_writing_style
-    multi_judge_aggregation: "worst_case"
+  # policy_notes (informational, not part of schema):
+  #   format_compliance_source: autocheck_primary
+  #   multi_judge_metrics: [harmlessness, japanese_writing_style]
+  #   multi_judge_aggregation: worst_case

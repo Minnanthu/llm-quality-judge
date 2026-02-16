@@ -215,7 +215,7 @@ class JudgeInfo(BaseModel):
 
 
 class Scores(BaseModel):
-    per_metric: dict[str, int]  # metric_id -> 1|3|5
+    per_metric: dict[str, int]  # metric_id -> 1-5 (anchors: 1/3/5)
     overall_winner: str | None = None  # pairwise: candidate_id or 'tie'
     overall_score: float | None = None  # absolute
 
@@ -251,6 +251,7 @@ class NotableFailure(BaseModel):
 
 class AggregateBlock(BaseModel):
     win_rate: dict[str, float] = Field(default_factory=dict)
+    loss_rate: dict[str, float] = Field(default_factory=dict)
     mean_score: dict[str, dict[str, float]] = Field(default_factory=dict)
     weighted_overall: dict[str, float] = Field(default_factory=dict)
     confidence_intervals: dict[str, Any] = Field(default_factory=dict)
