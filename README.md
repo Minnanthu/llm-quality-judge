@@ -100,7 +100,7 @@ uv run llm-eval compare --config configs/run-config.yaml
 ```yaml
 run_id: "quality-eval-20260213"
 
-candidates:            # 比較する候補モデル (2つ以上)
+candidates:            # 比較する候補モデル (1つ以上)
   - candidate_id: "tsuzumi2-28b"
     vendor: "tsuzumi2"
     model_id: "tsuzumi2-28b"
