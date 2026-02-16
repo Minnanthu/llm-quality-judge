@@ -251,8 +251,7 @@ class NotableFailure(BaseModel):
 
 class AggregateBlock(BaseModel):
     win_rate: dict[str, float] = Field(default_factory=dict)
-    mean_score: dict[str, float] = Field(default_factory=dict)
-    score_variance: dict[str, float] = Field(default_factory=dict)
+    mean_score: dict[str, dict[str, float]] = Field(default_factory=dict)
     confidence_intervals: dict[str, Any] = Field(default_factory=dict)
     critical_issue_count: dict[str, int] = Field(default_factory=dict)
     notable_failures: list[NotableFailure] = Field(default_factory=list)

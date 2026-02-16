@@ -21,7 +21,7 @@ from llm_eval.models import (
     Results,
     Testcase,
 )
-from llm_eval.utils import mean, read_jsonl, variance, write_json, write_jsonl
+from llm_eval.utils import mean, read_jsonl, write_json, write_jsonl
 
 
 def run_compare(
@@ -135,14 +135,20 @@ def _compute_aggregate(
             win_rate[cid] = round(win_counts[cid] / pairwise_total, 4)
         win_rate["tie"] = round(tie_count / pairwise_total, 4)
 
-    # Mean score per metric
-    metric_scores: dict[str, list[float]] = defaultdict(list)
+    # Mean score per metric per candidate
+    metric_scores: dict[str, dict[str, list[float]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
     for jdg in judgements:
-        for metric_id, score in jdg.scores.per_metric.items():
-            metric_scores[metric_id].append(score)
+        for t in jdg.targets:
+            cid = t.candidate_id
+            for metric_id, score in jdg.scores.per_metric.items():
+                metric_scores[metric_id][cid].append(score)
 
-    mean_score = {m: round(mean(v), 2) for m, v in metric_scores.items()}
-    score_var = {m: round(variance(v), 4) for m, v in metric_scores.items()}
+    mean_score: dict[str, dict[str, float]] = {
+        m: {cid: round(mean(scores), 2) for cid, scores in by_cid.items()}
+        for m, by_cid in metric_scores.items()
+    }
 
     # Critical issue count per candidate (using per-candidate tracking)
     ci_counts: dict[str, int] = defaultdict(int)
@@ -177,7 +183,6 @@ def _compute_aggregate(
     return AggregateBlock(
         win_rate=win_rate,
         mean_score=mean_score,
-        score_variance=score_var,
         critical_issue_count=critical_issue_count,
         notable_failures=failures,
     )
@@ -343,8 +348,14 @@ def _write_markdown_report(report: ComparisonReport, path: Path) -> None:
     lines.append("")
 
     if report.results.overall.win_rate:
+        lines.append("> [!NOTE]")
+        lines.append("> このレポートは **Win Rate (直接比較)** と **Mean Scores (個別採点)** という2つの異なる評価方式に基づいています。")
+        lines.append("> 評価視点が異なるため、特定の指標スコアが高くても Win Rate で負ける（あるいはその逆）といった結果が生じ得ます。")
+        lines.append("")
+
         lines.append("### Win Rate")
-        lines.append("各候補が Pairwise 比較で勝利した割合（Judge による判定）。")
+        lines.append("同じ評価指標 (Rubric) を基準としつつ、各候補の回答を並べて「どちらがより優れているか」を相対的に比較 (Pairwise判定) した結果です。")
+        lines.append("テストケース数が少ない場合、1件の判定が全体に大きく影響するため、トレンドを把握するための参考値として参照してください。")
         lines.append("")
         for cid, rate in report.results.overall.win_rate.items():
             lines.append(f"- {cid}: {rate:.1%}")
@@ -353,21 +364,27 @@ def _write_markdown_report(report: ComparisonReport, path: Path) -> None:
     if report.results.overall.mean_score:
         scale = report.protocol.get("scoring_scale", [1, 3, 5])
         scale_str = "/".join(str(s) for s in scale)
+        cids = [c.candidate_id for c in report.candidates]
         lines.append("### Mean Scores by Metric")
-        lines.append(f"各指標の絶対スコア平均（{scale_str} 段階評価、全候補・全テストケースの集約）。")
+        lines.append(f"各候補の回答を個別に採点し、全テストケースにわたって平均したスコア ({scale_str} 段階評価) です。")
+        lines.append("特定の強みや弱みを分析するのに適しています。")
         lines.append("")
-        var_data = report.results.overall.score_variance
-        lines.append("| Metric | Mean | Variance |")
-        lines.append("|--------|------|----------|")
-        for metric, score in sorted(report.results.overall.mean_score.items()):
-            v = var_data.get(metric, 0.0)
-            lines.append(f"| {metric} | {score:.2f} | {v:.4f} |")
+        header = "| Metric | " + " | ".join(cids) + " |"
+        sep = "|--------" + "|------" * len(cids) + "|"
+        lines.append(header)
+        lines.append(sep)
+        for metric, by_cid in sorted(report.results.overall.mean_score.items()):
+            vals = " | ".join(f"{by_cid.get(c, 0.0):.2f}" for c in cids)
+            lines.append(f"| {metric} | {vals} |")
         lines.append("")
 
     # By task type
     if report.results.by_task:
         lines.append("## Results by Task Type")
-        lines.append("タスク種別ごとの内訳。Win Rate は Pairwise 比較の勝率、Mean は絶対スコアの平均。")
+        desc = "タスク種別ごとの内訳。"
+        if report.results.overall.win_rate:
+            desc += "Win Rate は Pairwise 比較の勝率。"
+        lines.append(desc)
         lines.append("")
         for task_type, agg in report.results.by_task.items():
             lines.append(f"### {task_type}")
@@ -377,10 +394,14 @@ def _write_markdown_report(report: ComparisonReport, path: Path) -> None:
             if agg.mean_score:
                 if agg.win_rate:
                     lines.append("")
-                lines.append("| Metric | Mean |")
-                lines.append("|--------|------|")
-                for metric, score in sorted(agg.mean_score.items()):
-                    lines.append(f"| {metric} | {score:.2f} |")
+                cids = [c.candidate_id for c in report.candidates]
+                header = "| Metric | " + " | ".join(cids) + " |"
+                sep = "|--------" + "|------" * len(cids) + "|"
+                lines.append(header)
+                lines.append(sep)
+                for metric, by_cid in sorted(agg.mean_score.items()):
+                    vals = " | ".join(f"{by_cid.get(c, 0.0):.2f}" for c in cids)
+                    lines.append(f"| {metric} | {vals} |")
             lines.append("")
 
     # By bucket
@@ -396,10 +417,14 @@ def _write_markdown_report(report: ComparisonReport, path: Path) -> None:
             if agg.mean_score:
                 if agg.win_rate:
                     lines.append("")
-                lines.append("| Metric | Mean |")
-                lines.append("|--------|------|")
-                for metric, score in sorted(agg.mean_score.items()):
-                    lines.append(f"| {metric} | {score:.2f} |")
+                cids = [c.candidate_id for c in report.candidates]
+                header = "| Metric | " + " | ".join(cids) + " |"
+                sep = "|--------" + "|------" * len(cids) + "|"
+                lines.append(header)
+                lines.append(sep)
+                for metric, by_cid in sorted(agg.mean_score.items()):
+                    vals = " | ".join(f"{by_cid.get(c, 0.0):.2f}" for c in cids)
+                    lines.append(f"| {metric} | {vals} |")
             lines.append("")
 
     # Judge agreement

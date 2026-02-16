@@ -163,16 +163,12 @@
         "mean_score": {
           "type": "object",
           "additionalProperties": {
-            "type": "number"
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
           },
-          "description": "metricId -> mean score (or delta)"
-        },
-        "score_variance": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "number"
-          },
-          "description": "metricId -> variance of scores"
+          "description": "metricId -> { candidate_id -> mean score }"
         },
         "confidence_intervals": {
           "type": "object",

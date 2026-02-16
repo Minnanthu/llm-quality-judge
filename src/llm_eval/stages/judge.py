@@ -196,7 +196,15 @@ def _judge_pairwise(
         result_text = response.choices[0].message.content or "{}"
         result = json.loads(result_text)
 
-        per_metric = result.get("per_metric", {})
+        raw_per_metric = result.get("per_metric", {})
+        # Normalize: LLM may return {"A": 5, "B": 3} dicts instead of int
+        per_metric: dict[str, int] = {}
+        for k, v in raw_per_metric.items():
+            if isinstance(v, dict):
+                vals = [x for x in v.values() if isinstance(x, (int, float))]
+                per_metric[k] = round(sum(vals) / len(vals)) if vals else 0
+            else:
+                per_metric[k] = int(v)
         raw_winner = result.get("overall_winner", "tie")
         # Map label back to candidate_id
         if raw_winner in cand_map:
