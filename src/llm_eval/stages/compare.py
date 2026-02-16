@@ -54,16 +54,21 @@ def run_compare(
     # Build report
     candidate_ids = [c.candidate_id for c in cfg.candidates]
 
+    agg_method = cfg.protocol.aggregation.method
+    agg_weights = cfg.protocol.aggregation.weights
+
     overall = _compute_aggregate(
         judgements, candidate_ids, autochecks,
-        weights=cfg.protocol.aggregation.weights,
+        weights=agg_weights, method=agg_method,
     )
 
     by_task = _compute_by_group(
-        judgements, candidate_ids, autochecks, tc_map, group_by="task_type"
+        judgements, candidate_ids, autochecks, tc_map, group_by="task_type",
+        weights=agg_weights, method=agg_method,
     )
     by_bucket = _compute_by_group(
-        judgements, candidate_ids, autochecks, tc_map, group_by="bucket"
+        judgements, candidate_ids, autochecks, tc_map, group_by="bucket",
+        weights=agg_weights, method=agg_method,
     )
 
     agreement = _compute_judge_agreement(judgements)
@@ -117,6 +122,7 @@ def _compute_aggregate(
     candidate_ids: list[str],
     autochecks: list[AutoCheckRecord],
     weights: dict[str, float] | None = None,
+    method: str = "mean",
 ) -> AggregateBlock:
     """Compute aggregate stats across all judgements."""
     # Win rate (pairwise only)
@@ -166,10 +172,19 @@ def _compute_aggregate(
             if w_sum > 0:
                 weighted_overall[cid] = round(score_sum / w_sum, 2)
 
-    mean_score: dict[str, dict[str, float]] = {
-        m: {cid: round(mean(scores), 2) for cid, scores in by_cid.items()}
-        for m, by_cid in metric_scores.items()
-    }
+    # Aggregate metric scores according to method
+    if method == "worst_case":
+        # Use minimum score per metric per candidate
+        mean_score: dict[str, dict[str, float]] = {
+            m: {cid: round(min(scores), 2) for cid, scores in by_cid.items()}
+            for m, by_cid in metric_scores.items()
+        }
+    else:
+        # Default: mean (also used for majority_vote base scores)
+        mean_score: dict[str, dict[str, float]] = {
+            m: {cid: round(mean(scores), 2) for cid, scores in by_cid.items()}
+            for m, by_cid in metric_scores.items()
+        }
 
     # Critical issue count per candidate (using per-candidate tracking)
     ci_counts: dict[str, int] = defaultdict(int)
@@ -216,6 +231,8 @@ def _compute_by_group(
     autochecks: list[AutoCheckRecord],
     tc_map: dict[str, Testcase],
     group_by: str,
+    weights: dict[str, float] | None = None,
+    method: str = "mean",
 ) -> dict[str, AggregateBlock]:
     """Compute aggregate stats grouped by task_type or bucket."""
     groups: dict[str, list[JudgementRecord]] = defaultdict(list)
@@ -247,7 +264,10 @@ def _compute_by_group(
 
     result = {}
     for key, jdgs in groups.items():
-        result[key] = _compute_aggregate(jdgs, candidate_ids, ac_groups.get(key, []))
+        result[key] = _compute_aggregate(
+            jdgs, candidate_ids, ac_groups.get(key, []),
+            weights=weights, method=method,
+        )
 
     return result
 
