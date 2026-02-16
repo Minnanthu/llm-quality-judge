@@ -48,6 +48,8 @@ cp .env.example .env
 
 | 変数名 | 説明 |
 |--------|------|
+| `OPENAI_API_KEY` | OpenAI (本家) の API キー |
+| `OPENAI_ENDPOINT` | OpenAI API 互換のエンドポイント URL (任意) |
 | `AZURE_OPENAI_API_KEY` | Azure OpenAI の API キー |
 | `AZURE_OPENAI_ENDPOINT` | Azure OpenAI のエンドポイント URL |
 | `TSUZUMI2_API_KEY` | tsuzumi2 の API キー |
@@ -125,7 +127,7 @@ protocol:
     method: "majority_vote"
 ```
 
-設定のスキーマ: `schemas/run-config.schema.json`
+設定のスキーマ: `.claude/skills/evaluating-llm-quality/schemas/run-config.schema.json`
 
 ### `data/testcases.jsonl`
 
@@ -159,7 +161,8 @@ protocol:
 | `data/comparison-report-{run_id}.json` | JSON | 集計レポート（機械可読） |
 | `data/comparison-report-{run_id}.md` | Markdown | 集計レポート（人間可読） |
 
-各出力のスキーマは `schemas/` ディレクトリに定義されています。
+各出力のパイプラインスキーマは `.claude/skills/evaluating-llm-quality/schemas/` に定義されています。
+タスク出力の検証用スキーマは `schemas/` に配置します。
 
 ## 評価指標 (Metrics)
 
@@ -191,7 +194,7 @@ sample-llm-eval/
 │   └── run-config.yaml
 ├── data/                     # テストケース & 出力データ
 │   └── testcases.jsonl
-├── schemas/                  # JSON Schema 定義
+├── schemas/                  # タスク出力検証用 JSON Schema
 ├── src/llm_eval/             # Python パッケージ
 │   ├── cli.py                # CLI コマンド定義
 │   ├── models.py             # Pydantic データモデル

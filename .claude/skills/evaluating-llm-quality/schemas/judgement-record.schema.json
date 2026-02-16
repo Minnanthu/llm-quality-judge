@@ -134,6 +134,18 @@
         }
       }
     },
+    "critical_issue": {
+      "type": "boolean",
+      "default": false,
+      "description": "いずれかのtargetに重大な品質欠陥が検出された場合true"
+    },
+    "critical_issue_candidates": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "critical_issueが該当するcandidate_idのリスト（pairwiseで候補別に識別）"
+    },
     "rationale": {
       "type": "string"
     },

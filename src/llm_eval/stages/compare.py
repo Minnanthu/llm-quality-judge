@@ -344,12 +344,18 @@ def _write_markdown_report(report: ComparisonReport, path: Path) -> None:
 
     if report.results.overall.win_rate:
         lines.append("### Win Rate")
+        lines.append("各候補が Pairwise 比較で勝利した割合（Judge による判定）。")
+        lines.append("")
         for cid, rate in report.results.overall.win_rate.items():
             lines.append(f"- {cid}: {rate:.1%}")
         lines.append("")
 
     if report.results.overall.mean_score:
+        scale = report.protocol.get("scoring_scale", [1, 3, 5])
+        scale_str = "/".join(str(s) for s in scale)
         lines.append("### Mean Scores by Metric")
+        lines.append(f"各指標の絶対スコア平均（{scale_str} 段階評価、全候補・全テストケースの集約）。")
+        lines.append("")
         var_data = report.results.overall.score_variance
         lines.append("| Metric | Mean | Variance |")
         lines.append("|--------|------|----------|")
@@ -361,23 +367,39 @@ def _write_markdown_report(report: ComparisonReport, path: Path) -> None:
     # By task type
     if report.results.by_task:
         lines.append("## Results by Task Type")
+        lines.append("タスク種別ごとの内訳。Win Rate は Pairwise 比較の勝率、Mean は絶対スコアの平均。")
         lines.append("")
         for task_type, agg in report.results.by_task.items():
             lines.append(f"### {task_type}")
             if agg.win_rate:
                 for cid, rate in agg.win_rate.items():
                     lines.append(f"- {cid}: {rate:.1%}")
+            if agg.mean_score:
+                if agg.win_rate:
+                    lines.append("")
+                lines.append("| Metric | Mean |")
+                lines.append("|--------|------|")
+                for metric, score in sorted(agg.mean_score.items()):
+                    lines.append(f"| {metric} | {score:.2f} |")
             lines.append("")
 
     # By bucket
     if report.results.by_bucket:
         lines.append("## Results by Input Length Bucket")
+        lines.append("入力長カテゴリ (S/M/L) ごとの内訳。")
         lines.append("")
         for bucket, agg in report.results.by_bucket.items():
             lines.append(f"### Bucket: {bucket}")
             if agg.win_rate:
                 for cid, rate in agg.win_rate.items():
                     lines.append(f"- {cid}: {rate:.1%}")
+            if agg.mean_score:
+                if agg.win_rate:
+                    lines.append("")
+                lines.append("| Metric | Mean |")
+                lines.append("|--------|------|")
+                for metric, score in sorted(agg.mean_score.items()):
+                    lines.append(f"| {metric} | {score:.2f} |")
             lines.append("")
 
     # Judge agreement
@@ -412,6 +434,7 @@ def _write_markdown_report(report: ComparisonReport, path: Path) -> None:
     failures = report.results.overall.notable_failures
     if failures:
         lines.append("## Notable Failures")
+        lines.append("Autocheck で検出されたフォーマット・スキーマ違反。")
         lines.append("")
         for f in failures:
             lines.append(f"- **{f.testcase_id}** ({f.candidate_id}): {f.reason}")

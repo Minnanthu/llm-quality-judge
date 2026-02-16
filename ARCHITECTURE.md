@@ -8,7 +8,7 @@
 
 ### 安定する部分（変更しない）
 
-- **成果物スキーマ**: `schemas/` 配下の JSON Schema はパイプライン間の契約。容易に変更しない。
+- **成果物スキーマ**: `.claude/skills/evaluating-llm-quality/schemas/` 配下の JSON Schema はパイプライン間の契約。容易に変更しない。
 - **4 ステージ構成**: Inference → Autocheck → Judge → Compare の役割分離は固定。
 - **トレーサビリティ**: `run_id`, `prompt_version`, `input_hash` 等を必ず記録し、再現可能にする。
 
@@ -227,7 +227,7 @@ load_run_config() → RunConfig (Pydantic バリデーション済み)
 
 ### 新しいタスク種別を追加する
 
-1. `schemas/` にタスク出力用のスキーマを追加
+1. `schemas/` にタスク出力検証用のスキーマを追加
 2. `templates/` にプロンプトテンプレートを追加
 3. `data/testcases.jsonl` に `task_type` を指定したケースを追加
 
