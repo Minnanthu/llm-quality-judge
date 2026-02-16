@@ -7,7 +7,7 @@ dataset:
   holdout: false
 
 candidates:
-  - candidate_id: "openai-4o"
+  - candidate_id: "openai-4o-mini"
     vendor: "openai"
     model_id: "gpt-4o"
     prompt_version: "v1"
@@ -16,12 +16,12 @@ candidates:
       top_p: 1
       max_tokens: 1024
 
-  - candidate_id: "openai-4o-b"
+  - candidate_id: "openai-4o"
     vendor: "openai"
     model_id: "gpt-4o"
     prompt_version: "v1"
     generation_params:
-      temperature: 1
+      temperature: 0
       top_p: 1
       max_tokens: 1024
 
@@ -34,7 +34,7 @@ judges:
 
 protocol:
   scoring_scale: [1, 3, 5]
-  evaluation_mode: "hybrid"
+  evaluation_mode: "absolute"
 
   blinding:
     enabled: true

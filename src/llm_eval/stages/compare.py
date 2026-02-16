@@ -54,7 +54,10 @@ def run_compare(
     # Build report
     candidate_ids = [c.candidate_id for c in cfg.candidates]
 
-    overall = _compute_aggregate(judgements, candidate_ids, autochecks)
+    overall = _compute_aggregate(
+        judgements, candidate_ids, autochecks,
+        weights=cfg.protocol.aggregation.weights,
+    )
 
     by_task = _compute_by_group(
         judgements, candidate_ids, autochecks, tc_map, group_by="task_type"
@@ -113,6 +116,7 @@ def _compute_aggregate(
     judgements: list[JudgementRecord],
     candidate_ids: list[str],
     autochecks: list[AutoCheckRecord],
+    weights: dict[str, float] | None = None,
 ) -> AggregateBlock:
     """Compute aggregate stats across all judgements."""
     # Win rate (pairwise only)
@@ -135,15 +139,32 @@ def _compute_aggregate(
             win_rate[cid] = round(win_counts[cid] / pairwise_total, 4)
         win_rate["tie"] = round(tie_count / pairwise_total, 4)
 
-    # Mean score per metric per candidate
+    # Mean score per metric per candidate (absolute judgements only)
+    # Pairwise per_metric scores represent a comparative evaluation,
+    # not individual candidate scores, so they are excluded here.
     metric_scores: dict[str, dict[str, list[float]]] = defaultdict(
         lambda: defaultdict(list)
     )
     for jdg in judgements:
+        if jdg.mode == "pairwise":
+            continue  # skip pairwise – scores are not per-candidate
         for t in jdg.targets:
             cid = t.candidate_id
             for metric_id, score in jdg.scores.per_metric.items():
                 metric_scores[metric_id][cid].append(score)
+
+    # Compute weighted overall score per candidate if weights are provided
+    weighted_overall: dict[str, float] = {}
+    if weights and metric_scores:
+        for cid in candidate_ids:
+            w_sum = 0.0
+            score_sum = 0.0
+            for metric_id, w in weights.items():
+                if metric_id in metric_scores and cid in metric_scores[metric_id]:
+                    score_sum += mean(metric_scores[metric_id][cid]) * w
+                    w_sum += w
+            if w_sum > 0:
+                weighted_overall[cid] = round(score_sum / w_sum, 2)
 
     mean_score: dict[str, dict[str, float]] = {
         m: {cid: round(mean(scores), 2) for cid, scores in by_cid.items()}
@@ -183,6 +204,7 @@ def _compute_aggregate(
     return AggregateBlock(
         win_rate=win_rate,
         mean_score=mean_score,
+        weighted_overall=weighted_overall,
         critical_issue_count=critical_issue_count,
         notable_failures=failures,
     )
@@ -378,6 +400,17 @@ def _write_markdown_report(report: ComparisonReport, path: Path) -> None:
             lines.append(f"| {metric} | {vals} |")
         lines.append("")
 
+    if report.results.overall.weighted_overall:
+        cids = [c.candidate_id for c in report.candidates]
+        weights = report.protocol.get("aggregation", {}).get("weights", {})
+        weights_str = ", ".join(f"{k}: {v}" for k, v in weights.items())
+        lines.append("### Weighted Overall Score")
+        lines.append(f"設定された重み ({weights_str}) に基づく加重平均スコアです。")
+        lines.append("")
+        for cid in cids:
+            score = report.results.overall.weighted_overall.get(cid, 0.0)
+            lines.append(f"- {cid}: {score:.2f}")
+        lines.append("")
     # By task type
     if report.results.by_task:
         lines.append("## Results by Task Type")

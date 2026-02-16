@@ -52,7 +52,8 @@ def validate_output_against_testcase_schema(
         )
 
     try:
-        data = json.loads(output_text.strip())
+        from llm_eval.utils import strip_fenced_json
+        data = json.loads(strip_fenced_json(output_text))
     except json.JSONDecodeError:
         return SchemaValidationResult(
             schema_ref=schema_ref,

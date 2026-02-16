@@ -63,3 +63,17 @@ def variance(values: list[float | int]) -> float:
         return 0.0
     m = mean(values)
     return sum((v - m) ** 2 for v in values) / len(values)
+
+
+import re
+
+_FENCED_RE = re.compile(r"^```(?:json|JSON)?\s*\n(.*?)\n```\s*$", re.DOTALL)
+
+
+def strip_fenced_json(text: str) -> str:
+    """Remove ```json ... ``` fencing if present."""
+    stripped = text.strip()
+    m = _FENCED_RE.match(stripped)
+    if m:
+        return m.group(1).strip()
+    return stripped

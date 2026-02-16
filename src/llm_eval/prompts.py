@@ -102,7 +102,14 @@ def build_inference_prompt(testcase: Testcase) -> list[dict[str, str]]:
         if fmt.type == "json":
             system_parts.append("出力はJSON形式で返してください。")
             if fmt.json_schema_ref:
-                system_parts.append(f"JSONスキーマ: {fmt.json_schema_ref}")
+                schema_path = Path(fmt.json_schema_ref)
+                if schema_path.exists():
+                    schema_content = schema_path.read_text().strip()
+                    system_parts.append(
+                        f"出力は以下のJSONスキーマに準拠してください:\n```json\n{schema_content}\n```"
+                    )
+                else:
+                    system_parts.append(f"JSONスキーマ: {fmt.json_schema_ref}")
         elif fmt.type == "markdown":
             system_parts.append("出力はMarkdown形式で返してください。")
             if fmt.template_ref:

@@ -170,6 +170,13 @@
           },
           "description": "metricId -> { candidate_id -> mean score }"
         },
+        "weighted_overall": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "candidate_id -> weighted overall score"
+        },
         "confidence_intervals": {
           "type": "object",
           "additionalProperties": true

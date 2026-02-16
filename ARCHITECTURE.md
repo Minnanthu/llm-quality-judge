@@ -127,6 +127,8 @@ src/llm_eval/
 4. Judge の回答をパースし、ラベル (A/B) を candidate_id にマッピング
 5. `judge_repeats` 回繰り返し、分散を確認
 
+> **Note**: `inference_repeats > 1` の場合でも、pairwise 判定では候補ごとに 1 件の推論結果のみ使用します（全組合せ比較の O(n²) 爆発を防ぐため）。repeats による分散確認は absolute モードで行う設計です。
+
 #### Absolute モード
 
 1. 各候補出力を単独で Judge に提示

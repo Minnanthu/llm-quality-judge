@@ -107,8 +107,9 @@ def _call_model(
         # Try to parse JSON if expected
         if fmt == "json":
             import json as _json
+            from llm_eval.utils import strip_fenced_json
             try:
-                output.json_data = _json.loads(text)
+                output.json_data = _json.loads(strip_fenced_json(text))
             except _json.JSONDecodeError:
                 pass
 

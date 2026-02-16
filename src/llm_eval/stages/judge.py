@@ -51,7 +51,10 @@ def run_judge(
     for idx, inf in enumerate(inferences):
         inf_by_tc.setdefault(inf.testcase_id, []).append((idx, inf))
 
-    # For pairwise判定は候補ペアごとに一度に絞り、リピート同士の二乗爆発を防ぐ
+    # Pairwise 判定では候補ペアごとに 1 件の推論結果を使用する。
+    # inference_repeats > 1 の場合でも、pairwise で全組合せを比較すると
+    # O(repeats²) に爆発するため、候補ごとに最初の 1 件のみを採用する。
+    # repeats による分散確認は absolute モードで行う設計。
     pairwise_inf_by_tc: dict[str, list[tuple[int, InferenceRecord]]] = {}
     for tc_id, inf_list in inf_by_tc.items():
         seen_candidates: set[str] = set()
