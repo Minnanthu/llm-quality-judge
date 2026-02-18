@@ -4,4 +4,4 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-sample-llm-eval - An LLM evaluation project (newly initialized, structure TBD).
+llm-quality-judge - An LLM evaluation project (newly initialized, structure TBD).
