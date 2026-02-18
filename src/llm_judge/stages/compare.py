@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 
-from llm_eval.config import load_run_config
-from llm_eval.models import (
+from llm_judge.config import load_run_config
+from llm_judge.models import (
     AggregateBlock,
     AutoCheckRecord,
     CandidateInfo,
@@ -21,7 +21,7 @@ from llm_eval.models import (
     Results,
     Testcase,
 )
-from llm_eval.utils import mean, read_jsonl, write_json, write_jsonl
+from llm_judge.utils import mean, read_jsonl, write_json, write_jsonl
 
 
 def run_compare(
@@ -127,7 +127,7 @@ def _compute_aggregate(
     """Compute aggregate stats across all judgements."""
     import math
 
-    from llm_eval.utils import variance as _variance
+    from llm_judge.utils import variance as _variance
 
     # Win rate (pairwise only)
     win_counts: dict[str, int] = defaultdict(int)

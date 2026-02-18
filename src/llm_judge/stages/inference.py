@@ -8,9 +8,9 @@ from pathlib import Path
 
 from rich.progress import Progress
 
-from llm_eval.config import EnvConfig, load_run_config
-from llm_eval.llm_client import chat_completion, create_client
-from llm_eval.models import (
+from llm_judge.config import EnvConfig, load_run_config
+from llm_judge.llm_client import chat_completion, create_client
+from llm_judge.models import (
     InferenceRecord,
     ModelInfo,
     OutputInfo,
@@ -21,8 +21,8 @@ from llm_eval.models import (
     TimingInfo,
     UsageInfo,
 )
-from llm_eval.prompts import build_inference_prompt
-from llm_eval.utils import content_hash, read_jsonl, write_jsonl
+from llm_judge.prompts import build_inference_prompt
+from llm_judge.utils import content_hash, read_jsonl, write_jsonl
 
 
 def run_inference(config_path: str, output_path: str | None = None) -> Path:
@@ -107,7 +107,7 @@ def _call_model(
         # Try to parse JSON if expected
         if fmt == "json":
             import json as _json
-            from llm_eval.utils import strip_fenced_json
+            from llm_judge.utils import strip_fenced_json
             try:
                 output.json_data = _json.loads(strip_fenced_json(text))
             except _json.JSONDecodeError:

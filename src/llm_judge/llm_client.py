@@ -20,7 +20,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from llm_eval.config import resolve_vendor_env
+from llm_judge.config import resolve_vendor_env
 
 
 RETRYABLE_ERRORS = (APITimeoutError, APIConnectionError, RateLimitError)

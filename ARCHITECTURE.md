@@ -28,7 +28,7 @@
 ## モジュール構成
 
 ```
-src/llm_eval/
+src/llm_judge/
 ├── cli.py            ─── Typer CLI。各ステージのエントリポイント
 ├── models.py         ─── 全 JSON Schema に対応する Pydantic モデル
 ├── config.py         ─── RunConfig YAML 読込 + 環境変数解決

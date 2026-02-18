@@ -8,7 +8,7 @@ import typer
 from rich.console import Console
 
 app = typer.Typer(
-    name="llm-eval",
+    name="llm-judge",
     help="LLM evaluation pipeline: inference → autocheck → judge → compare",
 )
 console = Console()
@@ -22,7 +22,7 @@ def infer(
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output JSONL path"),
 ) -> None:
     """Stage 1: Run candidate model inference."""
-    from llm_eval.stages.inference import run_inference
+    from llm_judge.stages.inference import run_inference
 
     console.print("[bold blue]Stage 1: Inference[/bold blue]")
     out = run_inference(config, output)
@@ -36,7 +36,7 @@ def autocheck(
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output JSONL path"),
 ) -> None:
     """Stage 2: Run automated format and schema checks."""
-    from llm_eval.stages.autocheck import run_autocheck
+    from llm_judge.stages.autocheck import run_autocheck
 
     console.print("[bold blue]Stage 2: Autocheck[/bold blue]")
     out = run_autocheck(config, inference, output)
@@ -50,7 +50,7 @@ def judge(
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output JSONL path"),
 ) -> None:
     """Stage 3: Run LLM-as-a-Judge evaluation."""
-    from llm_eval.stages.judge import run_judge
+    from llm_judge.stages.judge import run_judge
 
     console.print("[bold blue]Stage 3: Judge[/bold blue]")
     out = run_judge(config, inference, output)
@@ -64,7 +64,7 @@ def compare(
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output JSON path"),
 ) -> None:
     """Stage 4: Aggregate and produce comparison report."""
-    from llm_eval.stages.compare import run_compare
+    from llm_judge.stages.compare import run_compare
 
     console.print("[bold blue]Stage 4: Compare[/bold blue]")
     out = run_compare(config, judgements, output_path=output)
@@ -77,10 +77,10 @@ def run_all(
     config: str = typer.Option(DEFAULT_CONFIG, "--config", "-c", help="Run config YAML path"),
 ) -> None:
     """Run all 4 stages in sequence."""
-    from llm_eval.stages.autocheck import run_autocheck
-    from llm_eval.stages.compare import run_compare
-    from llm_eval.stages.inference import run_inference
-    from llm_eval.stages.judge import run_judge
+    from llm_judge.stages.autocheck import run_autocheck
+    from llm_judge.stages.compare import run_compare
+    from llm_judge.stages.inference import run_inference
+    from llm_judge.stages.judge import run_judge
 
     console.print("[bold magenta]Running full pipeline[/bold magenta]")
 

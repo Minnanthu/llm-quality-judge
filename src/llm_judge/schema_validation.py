@@ -7,7 +7,7 @@ from pathlib import Path
 
 import jsonschema
 
-from llm_eval.models import Testcase
+from llm_judge.models import Testcase
 
 
 class SchemaValidationResult:
@@ -52,7 +52,7 @@ def validate_output_against_testcase_schema(
         )
 
     try:
-        from llm_eval.utils import strip_fenced_json
+        from llm_judge.utils import strip_fenced_json
         data = json.loads(strip_fenced_json(output_text))
     except json.JSONDecodeError:
         return SchemaValidationResult(

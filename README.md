@@ -1,4 +1,4 @@
-# sample-llm-eval
+# llm-quality-judge
 
 LLM の出力品質を **定量的に比較評価** するパイプラインです。
 複数の候補モデル（例: tsuzumi2 vs Azure OpenAI）の出力を、LLM-as-a-Judge 方式でスコアリングし、レポートを自動生成します。
@@ -62,23 +62,23 @@ cp .env.example .env
 ### 全ステージを一括実行
 
 ```bash
-uv run llm-eval run-all --config configs/run-config.yaml
+uv run llm-judge run-all --config configs/run-config.yaml
 ```
 
 ### ステージ個別実行
 
 ```bash
 # Stage 1: 推論
-uv run llm-eval infer --config configs/run-config.yaml
+uv run llm-judge infer --config configs/run-config.yaml
 
 # Stage 2: 形式チェック
-uv run llm-eval autocheck --config configs/run-config.yaml
+uv run llm-judge autocheck --config configs/run-config.yaml
 
 # Stage 3: Judge 採点
-uv run llm-eval judge --config configs/run-config.yaml
+uv run llm-judge judge --config configs/run-config.yaml
 
 # Stage 4: 集計・レポート
-uv run llm-eval compare --config configs/run-config.yaml
+uv run llm-judge compare --config configs/run-config.yaml
 ```
 
 ### 共通オプション
@@ -189,13 +189,13 @@ protocol:
 ## ディレクトリ構成
 
 ```
-sample-llm-eval/
+llm-quality-judge/
 ├── configs/                  # 評価プロトコル設定
 │   └── run-config.yaml
 ├── data/                     # テストケース & 出力データ
 │   └── testcases.jsonl
 ├── schemas/                  # タスク出力検証用 JSON Schema
-├── src/llm_eval/             # Python パッケージ
+├── src/llm_judge/             # Python パッケージ
 │   ├── cli.py                # CLI コマンド定義
 │   ├── models.py             # Pydantic データモデル
 │   ├── config.py             # 設定読込 & 環境変数

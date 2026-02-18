@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from warnings import warn
 
-from llm_eval.models import Constraints, JudgeRef, Testcase
+from llm_judge.models import Constraints, JudgeRef, Testcase
 
 # ── Template loading ──────────────────────────────────────
 

@@ -9,9 +9,9 @@ from pathlib import Path
 
 from rich.progress import Progress
 
-from llm_eval.config import EnvConfig, load_run_config
-from llm_eval.llm_client import chat_completion, create_client
-from llm_eval.models import (
+from llm_judge.config import EnvConfig, load_run_config
+from llm_judge.llm_client import chat_completion, create_client
+from llm_judge.models import (
     BlindingInfo,
     InferenceRecord,
     InferenceRef,
@@ -22,12 +22,12 @@ from llm_eval.models import (
     Scores,
     Testcase,
 )
-from llm_eval.prompts import build_absolute_judge_prompt, build_pairwise_judge_prompt
-from llm_eval.schema_validation import (
+from llm_judge.prompts import build_absolute_judge_prompt, build_pairwise_judge_prompt
+from llm_judge.schema_validation import (
     get_json_schema_ref,
     validate_output_against_testcase_schema,
 )
-from llm_eval.utils import read_jsonl, write_jsonl
+from llm_judge.utils import read_jsonl, write_jsonl
 
 
 def run_judge(

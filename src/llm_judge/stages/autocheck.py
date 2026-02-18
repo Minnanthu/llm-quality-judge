@@ -6,8 +6,8 @@ import json
 from pathlib import Path
 from rich.progress import Progress
 
-from llm_eval.config import load_run_config
-from llm_eval.models import (
+from llm_judge.config import load_run_config
+from llm_judge.models import (
     AutoCheckRecord,
     Checks,
     FormatCompliance,
@@ -15,11 +15,11 @@ from llm_eval.models import (
     JsonSchemaValidation,
     Testcase,
 )
-from llm_eval.schema_validation import (
+from llm_judge.schema_validation import (
     SchemaValidationResult,
     validate_output_against_testcase_schema,
 )
-from llm_eval.utils import read_jsonl, write_jsonl
+from llm_judge.utils import read_jsonl, write_jsonl
 
 
 def run_autocheck(
