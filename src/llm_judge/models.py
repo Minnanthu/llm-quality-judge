@@ -242,6 +242,24 @@ class JudgementRecord(BaseModel):
 # ── ComparisonReport ─────────────────────────────────────
 
 
+# ── ConsistencyRecord ─────────────────────────────────────
+
+
+class ConsistencyScores(BaseModel):
+    overall: float | None = None  # 1-5 scale
+    rationale: str | None = None
+
+
+class ConsistencyRecord(BaseModel):
+    run_id: str
+    testcase_id: str
+    candidate_id: str
+    judge_id: str
+    repeat_count: int  # how many inference outputs were compared
+    scores: ConsistencyScores
+    status: StatusInfo = Field(default_factory=StatusInfo)
+
+
 class NotableFailure(BaseModel):
     testcase_id: str | None = None
     candidate_id: str | None = None
@@ -257,6 +275,7 @@ class AggregateBlock(BaseModel):
     confidence_intervals: dict[str, Any] = Field(default_factory=dict)
     critical_issue_count: dict[str, int] = Field(default_factory=dict)
     notable_failures: list[NotableFailure] = Field(default_factory=list)
+    inference_consistency: dict[str, float] = Field(default_factory=dict)  # candidate_id -> mean 1-5 score
 
 
 class JudgeAgreement(BaseModel):

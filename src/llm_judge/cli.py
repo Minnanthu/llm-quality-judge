@@ -58,16 +58,31 @@ def judge(
 
 
 @app.command()
+def consistency(
+    config: str = typer.Option(DEFAULT_CONFIG, "--config", "-c", help="Run config YAML path"),
+    inference: Optional[str] = typer.Option(None, "--inference", "-i", help="Inference JSONL path"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output JSONL path"),
+) -> None:
+    """Stage 3b: Evaluate inference output consistency (requires inference_repeats >= 2)."""
+    from llm_judge.stages.consistency import run_consistency
+
+    console.print("[bold blue]Stage 3b: Consistency[/bold blue]")
+    out = run_consistency(config, inference, output)
+    console.print(f"[green]Done:[/green] {out}")
+
+
+@app.command()
 def compare(
     config: str = typer.Option(DEFAULT_CONFIG, "--config", "-c", help="Run config YAML path"),
     judgements: Optional[str] = typer.Option(None, "--judgements", "-j", help="Judgements JSONL path"),
+    consistency: Optional[str] = typer.Option(None, "--consistency", help="Consistency JSONL path"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output JSON path"),
 ) -> None:
     """Stage 4: Aggregate and produce comparison report."""
     from llm_judge.stages.compare import run_compare
 
     console.print("[bold blue]Stage 4: Compare[/bold blue]")
-    out = run_compare(config, judgements, output_path=output)
+    out = run_compare(config, judgements, output_path=output, consistency_path=consistency)
     console.print(f"[green]Done:[/green] {out}")
     console.print(f"[green]Markdown:[/green] {out.with_suffix('.md')}")
 
@@ -76,9 +91,10 @@ def compare(
 def run_all(
     config: str = typer.Option(DEFAULT_CONFIG, "--config", "-c", help="Run config YAML path"),
 ) -> None:
-    """Run all 4 stages in sequence."""
+    """Run all stages in sequence (inference → autocheck → judge → consistency → compare)."""
     from llm_judge.stages.autocheck import run_autocheck
     from llm_judge.stages.compare import run_compare
+    from llm_judge.stages.consistency import run_consistency
     from llm_judge.stages.inference import run_inference
     from llm_judge.stages.judge import run_judge
 
@@ -96,8 +112,12 @@ def run_all(
     jdg_out = run_judge(config, str(inf_out))
     console.print(f"[green]Done:[/green] {jdg_out}")
 
+    console.print("\n[bold blue]Stage 3b: Consistency[/bold blue]")
+    con_out = run_consistency(config, str(inf_out))
+    console.print(f"[green]Done:[/green] {con_out}")
+
     console.print("\n[bold blue]Stage 4: Compare[/bold blue]")
-    cmp_out = run_compare(config, str(jdg_out))
+    cmp_out = run_compare(config, str(jdg_out), consistency_path=str(con_out))
     console.print(f"[green]Done:[/green] {cmp_out}")
     console.print(f"[green]Markdown:[/green] {cmp_out.with_suffix('.md')}")
 

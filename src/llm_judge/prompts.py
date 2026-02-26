@@ -263,3 +263,59 @@ def build_absolute_judge_prompt(
         {"role": "system", "content": system_msg},
         {"role": "user", "content": user_msg},
     ]
+
+
+def build_consistency_judge_prompt(
+    testcase: Testcase,
+    outputs: list[str],
+    rubric_version: str,
+) -> list[dict[str, str]]:
+    """Build prompt to evaluate consistency among N repeated inference outputs.
+
+    The Judge is asked to score (1-5) how consistently the candidate model
+    answered the same prompt across all outputs. A score of 5 means every
+    output conveys the same core information / conclusion without
+    contradiction; a score of 1 means the outputs significantly contradict
+    or diverge from each other.
+    """
+    rubric = load_rubric(rubric_version)
+
+    system_msg = f"""あなたはLLM出力の品質評価を行う公平なJudgeです。
+同一プロンプトに対して生成された複数の回答が、互いに一貫しているかどうかを評価してください。
+
+## 評価基準（一貫性スコア）
+- **5（非常に一貫）**: すべての回答が同じ核心的な主張・結論・情報を伝えており、矛盾がない。
+- **3（概ね一貫）**: おおむね同じ内容だが、表現や詳細度に有意なバラつきがある、あるいは小さな矛盾がある。
+- **1（不一貫）**: 回答間で核心的な主張や事実が矛盾している、または結論が大きく異なる。
+
+## ルーブリック（参考）
+{rubric}
+
+## 出力形式
+以下のJSON形式のみで出力してください（説明文は不要）:
+{{
+  "overall": <1〜5のスコア（整数または小数）>,
+  "rationale": "判定理由（日本語）"
+}}
+"""
+
+    outputs_str = "\n\n".join(
+        f"## 出力 {i + 1}\n{text}" for i, text in enumerate(outputs)
+    )
+
+    user_msg = f"""## タスク情報
+- task_type: {testcase.task_type}
+- testcase_id: {testcase.testcase_id}
+
+## 入力（共通）
+{_format_input(testcase.input)}
+
+## 評価対象: 同一プロンプトへの繰り返し出力 ({len(outputs)} 件)
+
+{outputs_str}
+"""
+
+    return [
+        {"role": "system", "content": system_msg},
+        {"role": "user", "content": user_msg},
+    ]

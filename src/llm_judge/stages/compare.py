@@ -11,6 +11,7 @@ from llm_judge.models import (
     AutoCheckRecord,
     CandidateInfo,
     ComparisonReport,
+    ConsistencyRecord,
     InferenceRecord,
     JudgeAgreement,
     JudgeSummary,
@@ -30,6 +31,7 @@ def run_compare(
     autocheck_path: str | None = None,
     inference_path: str | None = None,
     output_path: str | None = None,
+    consistency_path: str | None = None,
 ) -> Path:
     """Aggregate judgements and produce comparison report."""
     cfg = load_run_config(config_path)
@@ -46,6 +48,14 @@ def run_compare(
             AutoCheckRecord.model_validate(r) for r in read_jsonl(ack_path)
         ]
 
+    # Load consistency if available
+    con_path = consistency_path or f"data/consistency-{cfg.run_id}.jsonl"
+    consistencies: list[ConsistencyRecord] = []
+    if Path(con_path).exists():
+        consistencies = [
+            ConsistencyRecord.model_validate(r) for r in read_jsonl(con_path)
+        ]
+
     # Load testcases for metadata
     raw_testcases = read_jsonl(cfg.dataset.testcases_path)
     testcases = [Testcase.model_validate(tc) for tc in raw_testcases]
@@ -58,16 +68,16 @@ def run_compare(
     agg_weights = cfg.protocol.aggregation.weights
 
     overall = _compute_aggregate(
-        judgements, candidate_ids, autochecks,
+        judgements, candidate_ids, autochecks, consistencies,
         weights=agg_weights, method=agg_method,
     )
 
     by_task = _compute_by_group(
-        judgements, candidate_ids, autochecks, tc_map, group_by="task_type",
+        judgements, candidate_ids, autochecks, tc_map, consistencies, group_by="task_type",
         weights=agg_weights, method=agg_method,
     )
     by_bucket = _compute_by_group(
-        judgements, candidate_ids, autochecks, tc_map, group_by="bucket",
+        judgements, candidate_ids, autochecks, tc_map, consistencies, group_by="bucket",
         weights=agg_weights, method=agg_method,
     )
 
@@ -121,6 +131,7 @@ def _compute_aggregate(
     judgements: list[JudgementRecord],
     candidate_ids: list[str],
     autochecks: list[AutoCheckRecord],
+    consistencies: list[ConsistencyRecord] | None = None,
     weights: dict[str, float] | None = None,
     method: str = "mean",
 ) -> AggregateBlock:
@@ -254,6 +265,17 @@ def _compute_aggregate(
                 )
             )
 
+    # Inference consistency (from consistency stage)
+    inference_consistency: dict[str, float] = {}
+    if consistencies:
+        con_scores: dict[str, list[float]] = defaultdict(list)
+        for rec in consistencies:
+            if rec.status.ok and rec.scores.overall is not None:
+                con_scores[rec.candidate_id].append(rec.scores.overall)
+        for cid, scores in con_scores.items():
+            if scores:
+                inference_consistency[cid] = round(mean(scores), 2)
+
     return AggregateBlock(
         win_rate=win_rate,
         loss_rate=loss_rate,
@@ -262,6 +284,7 @@ def _compute_aggregate(
         confidence_intervals=confidence_intervals,
         critical_issue_count=critical_issue_count,
         notable_failures=failures,
+        inference_consistency=inference_consistency,
     )
 
 
@@ -270,13 +293,15 @@ def _compute_by_group(
     candidate_ids: list[str],
     autochecks: list[AutoCheckRecord],
     tc_map: dict[str, Testcase],
-    group_by: str,
+    consistencies: list[ConsistencyRecord] | None = None,
+    group_by: str = "task_type",
     weights: dict[str, float] | None = None,
     method: str = "mean",
 ) -> dict[str, AggregateBlock]:
     """Compute aggregate stats grouped by task_type or bucket."""
     groups: dict[str, list[JudgementRecord]] = defaultdict(list)
     ac_groups: dict[str, list[AutoCheckRecord]] = defaultdict(list)
+    con_groups: dict[str, list[ConsistencyRecord]] = defaultdict(list)
 
     for jdg in judgements:
         tc = tc_map.get(jdg.testcase_id)
@@ -302,10 +327,22 @@ def _compute_by_group(
             key = "all"
         ac_groups[key].append(ac)
 
+    for con in (consistencies or []):
+        tc = tc_map.get(con.testcase_id)
+        if not tc:
+            continue
+        if group_by == "task_type":
+            key = tc.task_type
+        elif group_by == "bucket":
+            key = (tc.metadata.input_length_bucket if tc.metadata else None) or "unknown"
+        else:
+            key = "all"
+        con_groups[key].append(con)
+
     result = {}
     for key, jdgs in groups.items():
         result[key] = _compute_aggregate(
-            jdgs, candidate_ids, ac_groups.get(key, []),
+            jdgs, candidate_ids, ac_groups.get(key, []), con_groups.get(key, []),
             weights=weights, method=method,
         )
 
@@ -553,6 +590,24 @@ def _write_markdown_report(report: ComparisonReport, path: Path) -> None:
         )
         if report.results.judge_agreement.notes:
             lines.append(f"- {report.results.judge_agreement.notes}")
+        lines.append("")
+
+    # Inference consistency
+    if report.results.overall.inference_consistency:
+        cids = [c.candidate_id for c in report.candidates]
+        lines.append("## Inference Consistency")
+        lines.append(
+            "同一プロンプトへの繰り返し推論（inference_repeats）の出力間の一貫性を"
+            "LLM-as-a-Judgeで評価したスコア（1〜5）。"
+            "5 = 非常に一貫、1 = 不一貫。"
+        )
+        lines.append("")
+        lines.append("| Candidate | Consistency Score (1-5) |")
+        lines.append("|-----------|------------------------|")
+        for cid in cids:
+            score = report.results.overall.inference_consistency.get(cid)
+            score_str = f"{score:.2f}" if score is not None else "—"
+            lines.append(f"| {cid} | {score_str} |")
         lines.append("")
 
     # Critical issues

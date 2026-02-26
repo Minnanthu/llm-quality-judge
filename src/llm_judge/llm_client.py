@@ -67,6 +67,9 @@ def chat_completion(
     **kwargs: Any,
 ) -> Any:
     """Call chat completions with automatic retry on transient errors."""
+    if "max_tokens" in kwargs and model.startswith(("gpt-5", "o1", "o3")):
+        kwargs["max_completion_tokens"] = kwargs.pop("max_tokens")
+
     return client.chat.completions.create(
         model=model,
         messages=messages,
