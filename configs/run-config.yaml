@@ -7,8 +7,12 @@ dataset:
   holdout: false
 
 candidates:
+  # [注意] Structured Output の要否は testcase の constraints.output_format 設定で決まります。
+  # output_format.type == "json" かつ json_schema_ref が設定されている場合のみ
+  # response_format=json_schema を試行します。
+  # vendor が "openai"/"azure-openai" 以外なら自由文フォールバックで推論されます。
   - candidate_id: "tsuzumi2-28b"
-    vendor: "tsuzumi2"
+    vendor: "tsuzumi2"   # json_schema_ref 設定時は structured output 非対応 → フォールバック推論
     model_id: "tsuzumi2-28b"
     prompt_version: "v1"
     generation_params:
@@ -17,7 +21,7 @@ candidates:
       max_tokens: 1024
 
   - candidate_id: "aoai-gpt-4o"
-    vendor: "azure-openai"
+    vendor: "azure-openai"   # json_schema_ref 設定時は structured output 対応
     model_id: "gpt-4o"
     prompt_version: "v1"
     generation_params:

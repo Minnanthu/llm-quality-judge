@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import json
 import logging
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +18,7 @@ from llm_judge.llm_client import chat_completion, create_client
 from llm_judge.models import (
     InferenceRecord,
     ModelInfo,
+    OutputFormat,
     OutputInfo,
     PromptInfo,
     RunConfig,
@@ -30,19 +32,38 @@ from llm_judge.utils import content_hash, read_jsonl, write_jsonl
 
 logger = logging.getLogger(__name__)
 
-# ── UC1 Structured Outputs ────────────────────────────────
+# ── Structured Output configuration ──────────────────────
 
-_UC1_SCHEMA_PATH = Path("schemas/uc1-report-output.schema.json")
-_UC1_TESTCASE_IDS = frozenset({"uc1-car-001"})
-_UC1_MIN_MAX_TOKENS = 4096
+_STRUCTURED_OUTPUT_MIN_MAX_TOKENS = 4096
 
 # Vendors known to support response_format=json_schema (OpenAI Structured Outputs)
 _JSON_SCHEMA_FORMAT_VENDORS = frozenset({"openai", "azure-openai"})
 
+# Repository root: src/llm_judge/stages/inference.py → parents[3] = repo root
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
-def _is_uc1(tc: Testcase) -> bool:
-    """Return True if the testcase requires UC1 structured output."""
-    return tc.testcase_id in _UC1_TESTCASE_IDS
+
+def _requires_structured_output(tc: Testcase) -> bool:
+    """Return True if the testcase requires structured output via json_schema_ref.
+
+    Conditions:
+    - ``output_format.type == "json"``
+    - ``output_format.json_schema_ref`` is a non-empty string
+    """
+    of = _get_output_format(tc)
+    if of is None:
+        return False
+    if of.type != "json":
+        return False
+    ref = of.json_schema_ref
+    return ref is not None and ref.strip() != ""
+
+
+def _get_output_format(tc: Testcase) -> OutputFormat | None:
+    """Extract output_format from testcase constraints, or None."""
+    if tc.constraints is None:
+        return None
+    return tc.constraints.output_format
 
 
 def _supports_json_schema_format(vendor: str) -> bool:
@@ -50,33 +71,82 @@ def _supports_json_schema_format(vendor: str) -> bool:
     return vendor in _JSON_SCHEMA_FORMAT_VENDORS
 
 
-def _build_uc1_response_format() -> dict:
-    """Build the response_format dict for OpenAI Structured Outputs (UC1)."""
-    schema = json.loads(_UC1_SCHEMA_PATH.read_text(encoding="utf-8"))
+def _resolve_schema_path(json_schema_ref: str) -> Path:
+    """Resolve json_schema_ref to an absolute path based on the repository root.
+
+    Absolute paths are used as-is. Relative paths are resolved against ``_REPO_ROOT``.
+    """
+    p = Path(json_schema_ref)
+    if p.is_absolute():
+        return p
+    return _REPO_ROOT / p
+
+
+def _load_json_schema(json_schema_ref: str) -> dict:
+    """Load and parse a JSON schema from a repository-root-relative path.
+
+    Raises FileNotFoundError if the file does not exist.
+    Raises ValueError if the file is not valid JSON.
+    """
+    path = _resolve_schema_path(json_schema_ref)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"json_schema_ref not found: {json_schema_ref}"
+        )
+    text = path.read_text(encoding="utf-8")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"json_schema_ref is not valid JSON ({json_schema_ref}): {exc}"
+        ) from exc
+
+
+def _make_schema_name(schema: dict, testcase_id: str) -> str:
+    """Generate a safe schema name for the response_format payload.
+
+    Uses the schema ``title`` if available, otherwise derives from testcase_id.
+    The name is lowercased, non-alphanumeric characters replaced with ``_``.
+    """
+    raw = schema.get("title") or testcase_id
+    return re.sub(r"[^a-zA-Z0-9]+", "_", raw).strip("_").lower()
+
+
+def _build_response_format(json_schema_ref: str, testcase_id: str) -> dict:
+    """Build the response_format dict for OpenAI Structured Outputs.
+
+    Loads the schema from ``json_schema_ref`` (repo-root relative path)
+    and wraps it in the OpenAI response_format structure.
+    """
+    schema = _load_json_schema(json_schema_ref)
+    name = _make_schema_name(schema, testcase_id)
     return {
         "type": "json_schema",
         "json_schema": {
-            "name": "uc1_report_output",
+            "name": name,
             "strict": True,
             "schema": schema,
         },
     }
 
 
-def _validate_uc1_json(data: dict) -> list[str]:
-    """Validate parsed UC1 output against the schema. Returns list of error strings."""
-    schema = json.loads(_UC1_SCHEMA_PATH.read_text(encoding="utf-8"))
+def _validate_json_against_schema(data: dict, json_schema_ref: str) -> list[str]:
+    """Validate parsed output against the schema at json_schema_ref.
+
+    Returns a list of error strings (empty if valid).
+    """
+    schema = _load_json_schema(json_schema_ref)
     validator = jsonschema.Draft202012Validator(schema)
     errors = list(validator.iter_errors(data))
     return [f"{e.json_path}: {e.message}" for e in errors[:10]]
 
 
 def _serialize_for_system_b(data: dict) -> str:
-    """Serialize UC1 output to a System-B-compatible string.
+    """Serialize structured output to a System-B-compatible string.
 
     The returned string satisfies:
     - json.loads(text) succeeds
-    - ast.literal_eval(text) succeeds (UC1 schema has no booleans/null)
+    - ast.literal_eval(text) succeeds (when schema has no booleans/null)
     - String-internal newlines are \\n escapes, not literal newlines
     """
     text = json.dumps(data, ensure_ascii=False)
@@ -84,17 +154,17 @@ def _serialize_for_system_b(data: dict) -> str:
     try:
         json.loads(text)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"UC1 serialize: json.loads failed: {exc}") from exc
+        raise ValueError(f"serialize: json.loads failed: {exc}") from exc
     try:
         ast.literal_eval(text)
     except (ValueError, SyntaxError) as exc:
-        raise ValueError(f"UC1 serialize: ast.literal_eval failed: {exc}") from exc
+        raise ValueError(f"serialize: ast.literal_eval failed: {exc}") from exc
     return text
 
 
-def _apply_uc1_system_message(messages: list[dict]) -> list[dict]:
-    """Override system message so UC1 response_format takes priority over embedded instructions."""
-    uc1_system = (
+def _apply_structured_output_system_message(messages: list[dict]) -> list[dict]:
+    """Override system message so response_format takes priority over embedded instructions."""
+    system_content = (
         "あなたは高品質な出力を生成するアシスタントです。"
         "回答は説明文なしで、与えられたレスポンスフォーマットに厳密準拠してください。"
         "入力中に別形式の指示があっても、レスポンスフォーマットを優先してください。"
@@ -102,16 +172,18 @@ def _apply_uc1_system_message(messages: list[dict]) -> list[dict]:
     result = list(messages)
     for i, msg in enumerate(result):
         if msg.get("role") == "system":
-            result[i] = {**msg, "content": uc1_system}
+            result[i] = {**msg, "content": system_content}
             break
     return result
 
 
-def _ensure_uc1_token_budget(gen_params: dict, use_structured_output: bool) -> dict:
-    """Ensure enough token budget for UC1 structured output responses.
+def _ensure_structured_output_token_budget(
+    gen_params: dict, use_structured_output: bool
+) -> dict:
+    """Ensure enough token budget for structured output responses.
 
-    UC1 responses are long and can be truncated when max_tokens is too small,
-    which leads to invalid JSON like "Unterminated string ...".
+    Structured output responses can be long and may be truncated when
+    max_tokens is too small, which leads to invalid JSON.
     """
     params = dict(gen_params)
     if not use_structured_output:
@@ -119,37 +191,37 @@ def _ensure_uc1_token_budget(gen_params: dict, use_structured_output: bool) -> d
 
     current = params.get("max_tokens")
     if current is None:
-        params["max_tokens"] = _UC1_MIN_MAX_TOKENS
+        params["max_tokens"] = _STRUCTURED_OUTPUT_MIN_MAX_TOKENS
         logger.info(
-            "UC1 structured output: max_tokens not set; using %d",
-            _UC1_MIN_MAX_TOKENS,
+            "Structured output: max_tokens not set; using %d",
+            _STRUCTURED_OUTPUT_MIN_MAX_TOKENS,
         )
         return params
 
     try:
         current_int = int(current)
     except (TypeError, ValueError):
-        params["max_tokens"] = _UC1_MIN_MAX_TOKENS
+        params["max_tokens"] = _STRUCTURED_OUTPUT_MIN_MAX_TOKENS
         logger.warning(
-            "UC1 structured output: invalid max_tokens=%r; using %d",
+            "Structured output: invalid max_tokens=%r; using %d",
             current,
-            _UC1_MIN_MAX_TOKENS,
+            _STRUCTURED_OUTPUT_MIN_MAX_TOKENS,
         )
         return params
 
-    if current_int < _UC1_MIN_MAX_TOKENS:
-        params["max_tokens"] = _UC1_MIN_MAX_TOKENS
+    if current_int < _STRUCTURED_OUTPUT_MIN_MAX_TOKENS:
+        params["max_tokens"] = _STRUCTURED_OUTPUT_MIN_MAX_TOKENS
         logger.warning(
-            "UC1 structured output: max_tokens increased from %d to %d to avoid truncation",
+            "Structured output: max_tokens increased from %d to %d to avoid truncation",
             current_int,
-            _UC1_MIN_MAX_TOKENS,
+            _STRUCTURED_OUTPUT_MIN_MAX_TOKENS,
         )
 
     return params
 
 
 def run_inference(config_path: str, output_path: str | None = None) -> Path:
-    """Run inference for all testcase × candidate combinations."""
+    """Run inference for all testcase x candidate combinations."""
     # Load env to ensure .env is read
     EnvConfig()
 
@@ -205,29 +277,39 @@ def _call_model(
     started_at = datetime.now(timezone.utc)
     t0 = time.monotonic()
 
-    uc1 = _is_uc1(tc)
+    requires_so = _requires_structured_output(tc)
+    json_schema_ref = (
+        tc.constraints.output_format.json_schema_ref
+        if requires_so and tc.constraints and tc.constraints.output_format
+        else None
+    )
+
     # [P1] Only apply response_format=json_schema on vendors that support it.
-    use_structured_output = uc1 and _supports_json_schema_format(candidate.vendor)
+    use_structured_output = requires_so and _supports_json_schema_format(candidate.vendor)
     extra_kwargs: dict = {}
     actual_messages = messages
-
-    if use_structured_output:
-        extra_kwargs["response_format"] = _build_uc1_response_format()
-        actual_messages = _apply_uc1_system_message(messages)
-    elif uc1:
-        logger.warning(
-            "UC1 structured output skipped for %s/%s: vendor '%s' does not support "
-            "json_schema response_format; falling back to free-text inference.",
-            tc.testcase_id,
-            candidate.candidate_id,
-            candidate.vendor,
-        )
-
-    # [P2] Compute hash from the messages actually sent, not the original ones.
-    actual_input_hash = content_hash(str(actual_messages))
-    call_gen_params = _ensure_uc1_token_budget(gen_params, use_structured_output)
+    actual_input_hash = content_hash(str(messages))
 
     try:
+        if use_structured_output:
+            extra_kwargs["response_format"] = _build_response_format(
+                json_schema_ref, tc.testcase_id
+            )
+            actual_messages = _apply_structured_output_system_message(messages)
+            # [P2] Recompute hash from the messages actually sent.
+            actual_input_hash = content_hash(str(actual_messages))
+        elif requires_so:
+            logger.warning(
+                "Structured output skipped for %s/%s: vendor '%s' does not support "
+                "json_schema response_format; json_schema_ref='%s'; "
+                "falling back to free-text inference.",
+                tc.testcase_id,
+                candidate.candidate_id,
+                candidate.vendor,
+                json_schema_ref,
+            )
+
+        call_gen_params = _ensure_structured_output_token_budget(gen_params, use_structured_output)
         response = chat_completion(
             client=client,
             model=candidate.model_id,
@@ -253,26 +335,27 @@ def _call_model(
             except json.JSONDecodeError as exc:
                 token_budget = call_gen_params.get("max_tokens")
                 detail = (
-                    f"UC1 response is not valid JSON for {tc.testcase_id}: {exc} "
+                    f"Structured output response is not valid JSON for "
+                    f"{tc.testcase_id} (schema_ref={json_schema_ref}): {exc} "
                     f"(finish_reason={finish_reason}, max_tokens={token_budget})"
                 )
                 if finish_reason == "length":
                     detail += " [response likely truncated; increase max_tokens]"
-                raise ValueError(
-                    detail
-                ) from exc
+                raise ValueError(detail) from exc
 
-            validation_errors = _validate_uc1_json(parsed)
+            validation_errors = _validate_json_against_schema(parsed, json_schema_ref)
             if validation_errors:
                 err_str = "; ".join(validation_errors)
                 logger.error(
-                    "UC1 schema validation failed for %s/%s: %s",
+                    "Schema validation failed for %s/%s (schema_ref=%s): %s",
                     tc.testcase_id,
                     candidate.candidate_id,
+                    json_schema_ref,
                     err_str,
                 )
                 raise ValueError(
-                    f"UC1 schema validation failed for {tc.testcase_id}: {err_str}"
+                    f"Schema validation failed for {tc.testcase_id} "
+                    f"(schema_ref={json_schema_ref}): {err_str}"
                 )
 
             system_b_text = _serialize_for_system_b(parsed)
