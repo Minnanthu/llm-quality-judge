@@ -59,7 +59,7 @@ def _make_testcase(
 
 
 def _valid_uc1_data() -> dict:
-    """Valid data matching schemas/uc1-report-output.schema.json."""
+    """Valid data matching schemas/uc2-report-output.schema.json."""
     return {
         "tag_data": [
             {
@@ -106,7 +106,7 @@ def _valid_uc1_data() -> dict:
 @pytest.fixture()
 def uc1_schema_path() -> str:
     """Return the path to the UC1 schema (repo-root relative)."""
-    return "schemas/uc1-report-output.schema.json"
+    return "schemas/uc2-report-output.schema.json"
 
 
 @pytest.fixture()
@@ -459,9 +459,9 @@ class TestPathResolution:
         assert schema["title"] == "UC1ReportOutput"
 
     def test_resolve_schema_path_uses_repo_root_for_relative(self):
-        resolved = _resolve_schema_path("schemas/uc1-report-output.schema.json")
+        resolved = _resolve_schema_path("schemas/uc2-report-output.schema.json")
         assert resolved.is_absolute()
-        assert resolved == _REPO_ROOT / "schemas" / "uc1-report-output.schema.json"
+        assert resolved == _REPO_ROOT / "schemas" / "uc2-report-output.schema.json"
 
     def test_resolve_schema_path_keeps_absolute(self, tmp_schema):
         resolved = _resolve_schema_path(str(tmp_schema))

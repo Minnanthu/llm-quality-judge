@@ -131,7 +131,7 @@ protocol:
 
 > **Structured Output について**
 > テストケースの `constraints.output_format` で `type: "json"` かつ `json_schema_ref` が設定されている場合、`response_format=json_schema`（OpenAI Structured Outputs）を使用して JSON スキーマ準拠の出力を強制します。
-> `json_schema_ref` はリポジトリルート基準の相対パスで解決されます（例: `schemas/uc1-report-output.schema.json`）。
+> `json_schema_ref` はリポジトリルート基準の相対パスで解決されます（例: `schemas/uc2-report-output.schema.json`）。
 > この機能は **`vendor: "openai"` または `vendor: "azure-openai"` のみ対応**しています。
 > 非対応ベンダーでは自由文フォールバックで推論が継続され、推論レコード自体は失敗扱いになりません。
 > `json_schema_ref` のファイルが存在しない、または不正な JSON の場合は `status.ok=false` となります。
