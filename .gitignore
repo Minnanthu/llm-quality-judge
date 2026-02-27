@@ -4,6 +4,9 @@ data/autocheck-*.jsonl
 data/judgements-*.jsonl
 data/comparison-report-*
 
+# 実テストケース（ローカルのみ）
+data/testcases.jsonl
+
 # Python
 __pycache__/
 *.pyc
