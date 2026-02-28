@@ -27,13 +27,20 @@ run-config.yaml ─┘         │
 
 ### 前提条件
 
-- Python 3.11+
 - [uv](https://docs.astral.sh/uv/) (パッケージマネージャ)
+
+> **Python は別途インストール不要です。**  
+> `uv sync` を実行すると、`pyproject.toml` の `requires-python = ">=3.11"` を読んで  
+> uv が Python を自動でダウンロードし、プロジェクト直下の `.venv/` に隔離環境を作成します。  
+> システムの Python は一切汚染されません。
 
 ### インストール
 
 ```bash
-# 依存パッケージのインストール
+# uv のインストール (未導入の場合)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 依存パッケージのインストール (Python も自動取得)
 uv sync
 ```
 
