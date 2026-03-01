@@ -162,6 +162,8 @@ SKILL.md は薄く保ち、詳細はここに集約します（progressive discl
 
 ### 8.1 最低限出す集計
 - 勝率（pairwise）/ 平均スコア（absolute）
+- 敗率（pairwise）
+- 推論一貫性スコア（算出可能時、1-5）
 - タスク別・長さ別（S/M/L）で分解
 - Judge間一致率（マルチJudge時）
 - 重大失敗例（リンクと理由）

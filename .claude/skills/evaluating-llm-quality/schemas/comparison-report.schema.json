@@ -160,6 +160,15 @@
           },
           "description": "candidate_id -> win rate"
         },
+        "loss_rate": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "description": "candidate_id -> loss rate"
+        },
         "mean_score": {
           "type": "object",
           "additionalProperties": {
@@ -212,6 +221,15 @@
               }
             }
           }
+        },
+        "inference_consistency": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "description": "candidate_id -> mean consistency score (1-5)"
         }
       }
     }

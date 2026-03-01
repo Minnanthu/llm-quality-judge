@@ -175,6 +175,9 @@ protocol:
 | `data/comparison-report-{run_id}.json` | JSON | 集計レポート（機械可読） |
 | `data/comparison-report-{run_id}.md` | Markdown | 集計レポート（人間可読） |
 
+`comparison-report` の `results.*` には、`win_rate` / `loss_rate` / `mean_score` に加えて、
+算出可能な場合 `inference_consistency`（1-5）が含まれます。
+
 各出力のパイプラインスキーマは `.claude/skills/evaluating-llm-quality/schemas/` に定義されています。
 タスク出力の検証用スキーマは `schemas/` に配置します。
 

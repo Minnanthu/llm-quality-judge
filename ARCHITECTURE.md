@@ -154,7 +154,9 @@ Pairwise と Absolute の両方を実行します。
 | 集計 | 説明 |
 |------|------|
 | **overall.win_rate** | 候補ごとの勝率（pairwise）、tie 率を含む |
+| **overall.loss_rate** | 候補ごとの敗率（pairwise） |
 | **overall.mean_score** | 評価指標ごとの平均スコア |
+| **overall.inference_consistency** | 候補ごとの推論一貫性スコア（算出可能時、1-5） |
 | **by_task** | task_type 別の集計 |
 | **by_bucket** | input_length_bucket (S/M/L) 別の集計 |
 | **critical_issue_count** | 候補ごとの重大品質欠陥 (`critical_issue=true`) の件数 |
