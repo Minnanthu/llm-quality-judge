@@ -163,6 +163,30 @@ Pairwise と Absolute の両方を実行します。
 | **judge_agreement** | Judge 間の一致率（同一ケース・同一ペアの判定一致度） |
 | **notable_failures** | Autocheck で検出された形式エラー・スキーマ不整合 |
 
+#### 集約方式 (`aggregation.method`)
+
+`run-config.yaml` の `protocol.aggregation.method` により、Judge 採点スコアの集約方式を選択します。
+
+| method | 動作 |
+|--------|------|
+| `mean` | 全スコアの算術平均 |
+| `worst_case` | 全スコアの最小値 |
+| `majority_vote` | ケース内多数決で代表値を決定後、代表値群の算術平均（下記参照） |
+| `custom` | `weights` 指定必須。per-metric は `mean` と同様に算出し、`weighted_overall` で重みを反映 |
+
+**`majority_vote` の集約手順:**
+
+- **absolute モード**:
+  1. 同一 `(testcase_id, candidate_id, judge_id, metric_id)` ごとに repeat スコアを収集
+  2. グループ内で最頻値（mode）を代表値とする（同票 tie の場合は最小値を採用）
+  3. 代表値群から `mean_score` / `weighted_overall` / `confidence_intervals` を算出
+- **pairwise モード**:
+  1. 同一 `(testcase_id, candidate_pair, judge_id)` ごとに repeat の勝敗判定を収集
+  2. グループ内で多数決により 1 票に縮約（同票 tie はどちらの勝ちにもカウントしない）
+  3. 縮約後の勝敗票から `win_rate` / `loss_rate` を算出
+
+> `mean` / `worst_case` / `custom` は repeat を含む全スコアをそのまま集約します（ケース内縮約は行いません）。
+
 Markdown レポートには上記を表形式で可視化します。
 
 ---

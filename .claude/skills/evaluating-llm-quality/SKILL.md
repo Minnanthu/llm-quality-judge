@@ -70,7 +70,9 @@ argument-hint: "[run-config.yaml]"
 - `protocol`: 以下が必須
   - `scoring_scale`: スコア配列（デフォルト `[1, 3, 5]`）
   - `evaluation_mode`: `pairwise` / `absolute` / `hybrid`
-  - `aggregation`: `method` (`mean`/`majority_vote`/`worst_case`/`custom`) が必須、`weights` は任意
+  - `aggregation`: `method` (`mean`/`majority_vote`/`worst_case`/`custom`) が必須。`custom` 時は `weights` 必須、それ以外は任意
+    - `majority_vote`（absolute）: 同一 `(testcase_id, candidate_id, judge_id, metric_id)` の repeat をケース内多数決で 1 値に縮約してから集約（tie 時は最小値）
+    - `majority_vote`（pairwise）: 同一 `(testcase_id, candidate_pair, judge_id)` の repeat を多数決で 1 票に縮約して勝敗率を算出
 
 **推奨（schema optional だが品質評価に必要）:**
 - `protocol.blinding`: `enabled` (bool), `random_seed` (int)

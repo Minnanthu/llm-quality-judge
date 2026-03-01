@@ -171,6 +171,20 @@ SKILL.md は薄く保ち、詳細はここに集約します（progressive discl
 ### 8.2 改善ループ
 - failure taxonomy として分類し、プロンプト改善・自動検査ルール追加・rubric明確化につなげる（holdoutは汚さない）
 
+### 8.3 集約方式 (`aggregation.method`) の実務ルール
+
+`majority_vote` は repeat による分散を吸収するための集約方式です。
+
+- **absolute モード**:
+  - 同一 `(testcase_id, candidate_id, judge_id, metric_id)` の repeat スコアをグループ化
+  - グループ内で最頻値（mode）を代表値とする
+  - 同票 tie の場合は最小値（保守的）を採用
+  - 代表値群から `mean_score` / `weighted_overall` / `confidence_intervals` を算出
+- **pairwise モード**:
+  - 同一 `(testcase_id, candidate_pair, judge_id)` の repeat 勝敗をグループ化
+  - グループ内で多数決により 1 票に縮約（同票 tie は勝敗にカウントしない）
+- `mean` は全スコアの算術平均、`worst_case` は最小値、`custom` は `weights` 指定必須で重み付き算出
+
 ---
 
 ## 9. ファイル参照（ナビ）

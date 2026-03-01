@@ -131,8 +131,10 @@ protocol:
     judge_repeats: 3            # 分散確認用に複数回実行
   metrics: [accuracy, completeness, ...]
   aggregation:
-    method: "majority_vote"
+    method: "majority_vote"     # mean / majority_vote / worst_case / custom
 ```
+
+> **`majority_vote`**: absolute では同一ケース・Judge・指標ごとに repeat スコアを多数決で 1 値に縮約してから集約します（tie 時は最小値）。pairwise では同一ケース・ペア・Judge ごとに repeat の勝敗を多数決で 1 票に縮約して勝敗率を算出します（tie 時はどちらの勝ちにもカウントしない）。
 
 設定のスキーマ: `.claude/skills/evaluating-llm-quality/schemas/run-config.schema.json`
 
