@@ -161,6 +161,28 @@ protocol:
 }
 ```
 
+マルチターン会話を評価したい場合は、`input.messages` に会話履歴を指定できます（`system` / `user` / `assistant`）。
+
+```json
+{
+  "testcase_id": "report-qa-multiturn-001",
+  "task_type": "report_qa",
+  "input": {
+    "messages": [
+      {"role": "system", "content": "あなたはセキュリティアナリストです。"},
+      {"role": "user", "content": "このログを分析してください。"},
+      {"role": "assistant", "content": "短時間に失敗ログイン3回、その後成功1回が見られます。"},
+      {"role": "user", "content": "不正アクセスの可能性と追加確認事項を教えてください。"}
+    ]
+  },
+  "constraints": {
+    "required_points": ["不確実性を明示", "追加確認事項を提示"],
+    "output_format": {"type": "markdown"}
+  },
+  "metadata": {"difficulty": 3, "input_length_bucket": "S", "tags": ["multiturn", "security"]}
+}
+```
+
 対応タスク種別: `preprocessing` / `report_generation` / `report_qa`
 
 推奨フォーマット運用:
