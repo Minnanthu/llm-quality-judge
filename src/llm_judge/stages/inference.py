@@ -13,6 +13,7 @@ from pathlib import Path
 import jsonschema
 from rich.progress import Progress
 
+from llm_judge.artifact_validation import validate_artifacts
 from llm_judge.config import EnvConfig, load_run_config
 from llm_judge.llm_client import chat_completion, create_client
 from llm_judge.models import (
@@ -28,6 +29,8 @@ from llm_judge.models import (
     UsageInfo,
 )
 from llm_judge.prompts import build_inference_prompt
+from llm_judge.schema_validation import resolve_schema_path
+from llm_judge.testcase_loader import load_testcases
 from llm_judge.utils import content_hash, read_jsonl, write_jsonl
 
 logger = logging.getLogger(__name__)
@@ -38,9 +41,6 @@ _STRUCTURED_OUTPUT_MIN_MAX_TOKENS = 4096
 
 # Vendors known to support response_format=json_schema (OpenAI Structured Outputs)
 _JSON_SCHEMA_FORMAT_VENDORS = frozenset({"openai", "azure-openai"})
-
-# Repository root: src/llm_judge/stages/inference.py → parents[3] = repo root
-_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _requires_structured_output(tc: Testcase) -> bool:
@@ -71,24 +71,13 @@ def _supports_json_schema_format(vendor: str) -> bool:
     return vendor in _JSON_SCHEMA_FORMAT_VENDORS
 
 
-def _resolve_schema_path(json_schema_ref: str) -> Path:
-    """Resolve json_schema_ref to an absolute path based on the repository root.
-
-    Absolute paths are used as-is. Relative paths are resolved against ``_REPO_ROOT``.
-    """
-    p = Path(json_schema_ref)
-    if p.is_absolute():
-        return p
-    return _REPO_ROOT / p
-
-
 def _load_json_schema(json_schema_ref: str) -> dict:
     """Load and parse a JSON schema from a repository-root-relative path.
 
     Raises FileNotFoundError if the file does not exist.
     Raises ValueError if the file is not valid JSON.
     """
-    path = _resolve_schema_path(json_schema_ref)
+    path = resolve_schema_path(json_schema_ref)
     if not path.exists():
         raise FileNotFoundError(
             f"json_schema_ref not found: {json_schema_ref}"
@@ -226,7 +215,7 @@ def run_inference(config_path: str, output_path: str | None = None) -> Path:
     EnvConfig()
 
     cfg = load_run_config(config_path)
-    testcases = _load_testcases(cfg)
+    testcases = load_testcases(cfg.dataset.testcases_path)
 
     out = Path(output_path or f"data/inference-{cfg.run_id}.jsonl")
     records: list[InferenceRecord] = []
@@ -255,14 +244,9 @@ def run_inference(config_path: str, output_path: str | None = None) -> Path:
                     records.append(record)
                     progress.advance(task)
 
+    validate_artifacts("inference-record", records)
     write_jsonl(out, records)
     return out
-
-
-def _load_testcases(cfg: RunConfig) -> list[Testcase]:
-    """Load testcases from the path specified in config."""
-    raw = read_jsonl(cfg.dataset.testcases_path)
-    return [Testcase.model_validate(r) for r in raw]
 
 
 def _call_model(
@@ -289,6 +273,7 @@ def _call_model(
     extra_kwargs: dict = {}
     actual_messages = messages
     actual_input_hash = content_hash(str(messages))
+    prompt_hash = content_hash(str(messages))
 
     try:
         if use_structured_output:
@@ -298,6 +283,7 @@ def _call_model(
             actual_messages = _apply_structured_output_system_message(messages)
             # [P2] Recompute hash from the messages actually sent.
             actual_input_hash = content_hash(str(actual_messages))
+            prompt_hash = content_hash(str(actual_messages))
         elif requires_so:
             logger.warning(
                 "Structured output skipped for %s/%s: vendor '%s' does not support "
@@ -380,7 +366,7 @@ def _call_model(
                 model_id=candidate.model_id,
                 endpoint=candidate.endpoint,
             ),
-            prompt=PromptInfo(prompt_version=candidate.prompt_version),
+            prompt=PromptInfo(prompt_version=candidate.prompt_version, prompt_hash=prompt_hash),
             generation_params=call_gen_params or None,
             input_hash=actual_input_hash,
             output=output,
@@ -414,6 +400,7 @@ def _call_model(
                 endpoint=candidate.endpoint,
             ),
             output=OutputInfo(text=""),
+            prompt=PromptInfo(prompt_version=candidate.prompt_version, prompt_hash=prompt_hash),
             input_hash=actual_input_hash,
             timing=TimingInfo(
                 started_at=started_at.isoformat(),

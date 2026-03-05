@@ -9,6 +9,7 @@ from pathlib import Path
 
 from rich.progress import Progress
 
+from llm_judge.artifact_validation import validate_artifacts
 from llm_judge.config import EnvConfig, load_run_config
 from llm_judge.llm_client import chat_completion, create_client
 from llm_judge.models import (
@@ -27,6 +28,7 @@ from llm_judge.schema_validation import (
     get_json_schema_ref,
     validate_output_against_testcase_schema,
 )
+from llm_judge.testcase_loader import load_testcase_map
 from llm_judge.utils import read_jsonl, write_jsonl
 
 
@@ -43,8 +45,7 @@ def run_judge(
     raw_inferences = read_jsonl(inf_path)
     inferences = [InferenceRecord.model_validate(r) for r in raw_inferences]
 
-    raw_testcases = read_jsonl(cfg.dataset.testcases_path)
-    tc_map = {tc["testcase_id"]: Testcase.model_validate(tc) for tc in raw_testcases}
+    tc_map = load_testcase_map(cfg.dataset.testcases_path)
 
     # Group inferences by testcase_id
     inf_by_tc: dict[str, list[tuple[int, InferenceRecord]]] = {}
@@ -120,6 +121,7 @@ def run_judge(
                             records.append(rec)
                             progress.advance(task)
 
+    validate_artifacts("judgement-record", records)
     write_jsonl(out, records)
     return out
 

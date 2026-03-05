@@ -8,6 +8,7 @@ from typing import Any
 from warnings import warn
 
 from llm_judge.models import Constraints, JudgeRef, Testcase
+from llm_judge.schema_validation import resolve_schema_path
 
 # ── Template loading ──────────────────────────────────────
 
@@ -102,7 +103,7 @@ def build_inference_prompt(testcase: Testcase) -> list[dict[str, str]]:
         if fmt.type == "json":
             system_parts.append("出力はJSON形式で返してください。")
             if fmt.json_schema_ref:
-                schema_path = Path(fmt.json_schema_ref)
+                schema_path = resolve_schema_path(fmt.json_schema_ref)
                 if schema_path.exists():
                     schema_content = schema_path.read_text().strip()
                     system_parts.append(

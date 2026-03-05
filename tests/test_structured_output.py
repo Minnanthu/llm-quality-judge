@@ -24,9 +24,9 @@ from llm_judge.models import (
     RunConfig,
     Testcase,
 )
+from llm_judge.schema_validation import _REPO_ROOT, resolve_schema_path as _resolve_schema_path
 from llm_judge.stages.inference import (
     _JSON_SCHEMA_FORMAT_VENDORS,
-    _REPO_ROOT,
     _STRUCTURED_OUTPUT_MIN_MAX_TOKENS,
     _apply_structured_output_system_message,
     _build_response_format,
@@ -35,7 +35,6 @@ from llm_judge.stages.inference import (
     _load_json_schema,
     _make_schema_name,
     _requires_structured_output,
-    _resolve_schema_path,
     _serialize_for_system_b,
     _supports_json_schema_format,
     _validate_json_against_schema,

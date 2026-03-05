@@ -9,6 +9,18 @@ import jsonschema
 
 from llm_judge.models import Testcase
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def resolve_schema_path(schema_ref: str) -> Path:
+    """Resolve a schema reference to an absolute path.
+
+    Absolute paths are returned as-is. Relative paths are resolved
+    against the repository root.
+    """
+    p = Path(schema_ref)
+    return p if p.is_absolute() else _REPO_ROOT / p
+
 
 class SchemaValidationResult:
     def __init__(self, schema_ref: str, passed: bool, errors: list[str]) -> None:
@@ -34,7 +46,7 @@ def validate_output_against_testcase_schema(
     if not schema_ref:
         return None
 
-    schema_path = Path(schema_ref)
+    schema_path = resolve_schema_path(schema_ref)
     if not schema_path.exists():
         return SchemaValidationResult(
             schema_ref=schema_ref,

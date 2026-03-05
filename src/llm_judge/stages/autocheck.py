@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from rich.progress import Progress
 
+from llm_judge.artifact_validation import validate_artifacts
 from llm_judge.config import load_run_config
 from llm_judge.models import (
     AutoCheckRecord,
@@ -19,6 +20,7 @@ from llm_judge.schema_validation import (
     SchemaValidationResult,
     validate_output_against_testcase_schema,
 )
+from llm_judge.testcase_loader import load_testcase_map
 from llm_judge.utils import read_jsonl, write_jsonl
 
 
@@ -34,10 +36,7 @@ def run_autocheck(
     raw_inferences = read_jsonl(inf_path)
     inferences = [InferenceRecord.model_validate(r) for r in raw_inferences]
 
-    raw_testcases = read_jsonl(cfg.dataset.testcases_path)
-    tc_map = {
-        tc["testcase_id"]: Testcase.model_validate(tc) for tc in raw_testcases
-    }
+    tc_map = load_testcase_map(cfg.dataset.testcases_path)
 
     out = Path(output_path or f"data/autocheck-{cfg.run_id}.jsonl")
     records: list[AutoCheckRecord] = []
@@ -58,6 +57,7 @@ def run_autocheck(
             )
             progress.advance(task)
 
+    validate_artifacts("autocheck-record", records)
     write_jsonl(out, records)
     return out
 

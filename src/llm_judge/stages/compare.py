@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 
+from llm_judge.artifact_validation import validate_single_artifact
 from llm_judge.config import load_run_config
 from llm_judge.models import (
     AggregateBlock,
@@ -22,6 +23,7 @@ from llm_judge.models import (
     Results,
     Testcase,
 )
+from llm_judge.testcase_loader import load_testcases as _load_testcases
 from llm_judge.utils import mean, read_jsonl, write_json, write_jsonl
 
 
@@ -57,8 +59,7 @@ def run_compare(
         ]
 
     # Load testcases for metadata
-    raw_testcases = read_jsonl(cfg.dataset.testcases_path)
-    testcases = [Testcase.model_validate(tc) for tc in raw_testcases]
+    testcases = _load_testcases(cfg.dataset.testcases_path)
     tc_map = {tc.testcase_id: tc for tc in testcases}
 
     # Build report
@@ -118,6 +119,7 @@ def run_compare(
     )
 
     json_out = Path(output_path or f"data/comparison-report-{cfg.run_id}.json")
+    validate_single_artifact("comparison-report", report)
     write_json(json_out, report)
 
     # Also write markdown summary
@@ -125,6 +127,183 @@ def run_compare(
     _write_markdown_report(report, md_out)
 
     return json_out
+
+
+def _mode_value(values: list[float | int]) -> float:
+    """Return the mode (most frequent value). Tie → min (conservative)."""
+    from collections import Counter
+
+    if not values:
+        return 0.0
+    counts = Counter(values)
+    max_count = max(counts.values())
+    modes = [v for v, c in counts.items() if c == max_count]
+    return float(min(modes))
+
+
+def _aggregate_scores(
+    method: str,
+    metric_scores: dict[str, dict[str, list[float]]],
+) -> dict[str, dict[str, float]]:
+    """Dispatch metric-score aggregation by method name."""
+    if method == "mean":
+        return {
+            m: {cid: round(mean(scores), 2) for cid, scores in by_cid.items()}
+            for m, by_cid in metric_scores.items()
+        }
+    if method == "worst_case":
+        return {
+            m: {cid: round(min(scores), 2) for cid, scores in by_cid.items()}
+            for m, by_cid in metric_scores.items()
+        }
+    if method == "majority_vote":
+        # After _reduce_absolute_scores_by_majority, each value is already
+        # a per-group mode.  Final aggregation is mean over those representatives.
+        return {
+            m: {cid: round(mean(scores), 2) for cid, scores in by_cid.items()}
+            for m, by_cid in metric_scores.items()
+        }
+    if method == "custom":
+        # custom uses mean per metric; weighting is applied in weighted_overall
+        return {
+            m: {cid: round(mean(scores), 2) for cid, scores in by_cid.items()}
+            for m, by_cid in metric_scores.items()
+        }
+    raise ValueError(f"Unknown aggregation method: '{method}'")
+
+
+def _compute_weighted_overall(
+    method: str,
+    weights: dict[str, float] | None,
+    metric_scores: dict[str, dict[str, list[float]]],
+    candidate_ids: list[str],
+) -> dict[str, float]:
+    """Compute weighted overall score per candidate."""
+    if method == "custom" and not weights:
+        raise ValueError(
+            "Aggregation method 'custom' requires non-empty weights"
+        )
+
+    if not weights or not metric_scores:
+        return {}
+
+    weighted_overall: dict[str, float] = {}
+    for cid in candidate_ids:
+        w_sum = 0.0
+        score_sum = 0.0
+        for metric_id, w in weights.items():
+            if metric_id in metric_scores and cid in metric_scores[metric_id]:
+                score_sum += mean(metric_scores[metric_id][cid]) * w
+                w_sum += w
+        if w_sum > 0:
+            weighted_overall[cid] = round(score_sum / w_sum, 2)
+    return weighted_overall
+
+
+def _count_pairwise_majority(
+    judgements: list[JudgementRecord],
+) -> dict[str, int]:
+    """Count majority-vote winners across (testcase, pair, judge) groups.
+
+    Returns a dict of winner_id -> count, including "tie".
+    """
+    # Group by (testcase_id, target_pair, judge_id)
+    groups: dict[str, list[str]] = defaultdict(list)
+    for jdg in judgements:
+        if jdg.mode != "pairwise" or not jdg.scores.overall_winner:
+            continue
+        target_key = "|".join(sorted(t.candidate_id for t in jdg.targets))
+        key = f"{jdg.testcase_id}:{target_key}:{jdg.judge.judge_id}"
+        groups[key].append(jdg.scores.overall_winner)
+
+    from collections import Counter
+
+    counts: dict[str, int] = defaultdict(int)
+    for winners in groups.values():
+        c = Counter(winners)
+        max_count = max(c.values())
+        modes = [w for w, cnt in c.items() if cnt == max_count]
+        majority_winner = "tie" if len(modes) > 1 else modes[0]
+        counts[majority_winner] += 1
+
+    return dict(counts)
+
+
+def _aggregate_majority_vote_pairwise(
+    judgements: list[JudgementRecord],
+    candidate_ids: list[str],
+) -> tuple[dict[str, float], dict[str, float]]:
+    """Compute win/loss rates using majority vote per (testcase, pair, judge) group."""
+    counts = _count_pairwise_majority(judgements)
+    total = sum(counts.values())
+    if total == 0:
+        return {}, {}
+
+    # Collect all target candidates per group to track losses
+    groups: dict[str, list[str]] = defaultdict(list)
+    group_targets: dict[str, set[str]] = {}
+    for jdg in judgements:
+        if jdg.mode != "pairwise" or not jdg.scores.overall_winner:
+            continue
+        target_key = "|".join(sorted(t.candidate_id for t in jdg.targets))
+        key = f"{jdg.testcase_id}:{target_key}:{jdg.judge.judge_id}"
+        groups[key].append(jdg.scores.overall_winner)
+        if key not in group_targets:
+            group_targets[key] = {t.candidate_id for t in jdg.targets}
+
+    from collections import Counter
+
+    win_counts: dict[str, int] = defaultdict(int)
+    loss_counts: dict[str, int] = defaultdict(int)
+    for key, winners in groups.items():
+        c = Counter(winners)
+        max_count = max(c.values())
+        modes = [w for w, cnt in c.items() if cnt == max_count]
+        majority_winner = "tie" if len(modes) > 1 else modes[0]
+        if majority_winner != "tie":
+            win_counts[majority_winner] += 1
+            for cid in group_targets[key]:
+                if cid != majority_winner:
+                    loss_counts[cid] += 1
+
+    win_rate: dict[str, float] = {}
+    loss_rate: dict[str, float] = {}
+    for cid in candidate_ids:
+        win_rate[cid] = round(win_counts[cid] / total, 4)
+        loss_rate[cid] = round(loss_counts[cid] / total, 4)
+
+    return win_rate, loss_rate
+
+
+def _reduce_absolute_scores_by_majority(
+    judgements: list[JudgementRecord],
+) -> dict[str, dict[str, list[float]]]:
+    """Reduce absolute scores by majority vote within each (testcase, candidate, judge, metric) group.
+
+    For each group of repeat scores, the mode is computed (tie → min).
+    Returns ``metric_scores`` in the same shape as the raw collector:
+    ``{metric_id: {candidate_id: [reduced_value_per_group, ...]}}``.
+    """
+    # Collect raw scores per (testcase_id, candidate_id, judge_id, metric_id)
+    raw: dict[tuple[str, str, str, str], list[float]] = defaultdict(list)
+    for jdg in judgements:
+        if jdg.mode == "pairwise":
+            continue
+        for t in jdg.targets:
+            cid = t.candidate_id
+            for metric_id, score in jdg.scores.per_metric.items():
+                key = (jdg.testcase_id, cid, jdg.judge.judge_id, metric_id)
+                raw[key].append(score)
+
+    # Reduce each group to its mode, then reorganise by metric → candidate
+    reduced: dict[str, dict[str, list[float]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+    for (tc_id, cid, judge_id, metric_id), scores in raw.items():
+        representative = _mode_value(scores)
+        reduced[metric_id][cid].append(representative)
+
+    return reduced
 
 
 def _compute_aggregate(
@@ -181,40 +360,32 @@ def _compute_aggregate(
             for metric_id, score in jdg.scores.per_metric.items():
                 metric_scores[metric_id][cid].append(score)
 
-    # Compute weighted overall score per candidate if weights are provided
-    weighted_overall: dict[str, float] = {}
-    if weights and metric_scores:
-        for cid in candidate_ids:
-            w_sum = 0.0
-            score_sum = 0.0
-            for metric_id, w in weights.items():
-                if metric_id in metric_scores and cid in metric_scores[metric_id]:
-                    score_sum += mean(metric_scores[metric_id][cid]) * w
-                    w_sum += w
-            if w_sum > 0:
-                weighted_overall[cid] = round(score_sum / w_sum, 2)
+    # For majority_vote, reduce scores per (testcase, candidate, judge, metric)
+    # group first, then use the reduced data for all downstream computations.
+    if method == "majority_vote":
+        metric_scores = _reduce_absolute_scores_by_majority(judgements)
 
     # Aggregate metric scores according to method
-    # - mean: simple arithmetic mean (default)
-    # - majority_vote: per-metric scores still use mean; majority_vote affects
-    #   winner determination at the testcase level, not per-metric averaging.
-    # - worst_case: minimum score per metric per candidate
-    # - custom: reserved for future extension; falls back to mean
-    if method == "worst_case":
-        mean_score: dict[str, dict[str, float]] = {
-            m: {cid: round(min(scores), 2) for cid, scores in by_cid.items()}
-            for m, by_cid in metric_scores.items()
-        }
-    else:
-        if method not in ("mean", "majority_vote", "custom"):
-            import logging
-            logging.getLogger(__name__).warning(
-                "Unknown aggregation method '%s'; falling back to mean", method
+    mean_score = _aggregate_scores(method, metric_scores)
+
+    # Compute weighted overall score per candidate
+    weighted_overall = _compute_weighted_overall(
+        method, weights, metric_scores, candidate_ids,
+    )
+
+    # Pairwise win_rate: for majority_vote, re-derive from per-testcase majority
+    if method == "majority_vote" and pairwise_total > 0:
+        win_rate, loss_rate = _aggregate_majority_vote_pairwise(
+            judgements, candidate_ids,
+        )
+        pairwise_total_adjusted = sum(
+            v for k, v in _count_pairwise_majority(judgements).items()
+        )
+        if pairwise_total_adjusted > 0:
+            tie_count_mv = _count_pairwise_majority(judgements).get("tie", 0)
+            win_rate["tie"] = round(
+                tie_count_mv / pairwise_total_adjusted, 4
             )
-        mean_score: dict[str, dict[str, float]] = {
-            m: {cid: round(mean(scores), 2) for cid, scores in by_cid.items()}
-            for m, by_cid in metric_scores.items()
-        }
 
     # Confidence intervals (95% CI via standard error) per metric per candidate
     confidence_intervals: dict[str, dict[str, dict[str, float]]] = {}

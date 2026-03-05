@@ -27,6 +27,7 @@ from llm_judge.models import (
     Testcase,
 )
 from llm_judge.prompts import build_consistency_judge_prompt
+from llm_judge.testcase_loader import load_testcase_map
 from llm_judge.utils import read_jsonl, write_jsonl
 
 
@@ -43,8 +44,7 @@ def run_consistency(
     raw_inferences = read_jsonl(inf_path)
     inferences = [InferenceRecord.model_validate(r) for r in raw_inferences]
 
-    raw_testcases = read_jsonl(cfg.dataset.testcases_path)
-    tc_map = {tc["testcase_id"]: Testcase.model_validate(tc) for tc in raw_testcases}
+    tc_map = load_testcase_map(cfg.dataset.testcases_path)
 
     # Group inferences by (testcase_id, candidate_id)
     groups: dict[tuple[str, str], list[InferenceRecord]] = defaultdict(list)
