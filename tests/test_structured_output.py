@@ -512,7 +512,10 @@ def _make_run_config() -> RunConfig:
     return RunConfig(
         run_id="test-run",
         dataset={"testcases_path": "data/testcases.jsonl"},
-        candidates=[],
+        candidates=[
+            {"candidate_id": "c0", "vendor": "openai", "model_id": "gpt-4o"},
+            {"candidate_id": "c1", "vendor": "openai", "model_id": "gpt-4o"},
+        ],
         judges=[],
         protocol={
             "evaluation_mode": "pairwise",

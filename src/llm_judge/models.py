@@ -130,6 +130,20 @@ class RunConfig(BaseModel):
     judges: list[JudgeRef]
     protocol: Protocol
 
+    @model_validator(mode="after")
+    def validate_candidate_count_by_mode(self) -> "RunConfig":
+        mode = self.protocol.evaluation_mode
+        n = len(self.candidates)
+        if mode in {"pairwise", "hybrid"} and n < 2:
+            raise ValueError(
+                f"evaluation_mode={mode} requires at least 2 candidates, got {n}"
+            )
+        if mode == "absolute" and n < 1:
+            raise ValueError(
+                "evaluation_mode=absolute requires at least 1 candidate"
+            )
+        return self
+
 
 # ── InferenceRecord ───────────────────────────────────────
 

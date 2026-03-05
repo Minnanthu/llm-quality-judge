@@ -42,7 +42,7 @@
     },
     "candidates": {
       "type": "array",
-      "minItems": 2,
+      "minItems": 1,
       "items": {
         "$ref": "#/$defs/modelRef"
       }
@@ -150,6 +150,24 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "protocol": {
+            "properties": {
+              "evaluation_mode": { "enum": ["pairwise", "hybrid"] }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "candidates": { "minItems": 2 }
+        }
+      }
+    }
+  ],
   "$defs": {
     "modelRef": {
       "type": "object",
