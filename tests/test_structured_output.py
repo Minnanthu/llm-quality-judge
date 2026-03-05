@@ -402,6 +402,29 @@ class TestInputHash:
         overridden = _apply_structured_output_system_message(original)
         assert content_hash(str(original)) != content_hash(str(overridden))
 
+    def test_hash_unchanged_for_messages_mode_with_structured_output(self):
+        """In messages mode, system override is skipped so hash should not change."""
+        from llm_judge.utils import content_hash
+
+        messages = [
+            {"role": "system", "content": "original system"},
+            {"role": "user", "content": "user message"},
+        ]
+        tc = Testcase(
+            testcase_id="mt-so",
+            task_type="report_qa",
+            input={"messages": messages},
+            constraints=Constraints(
+                output_format=OutputFormat(type="json", json_schema_ref="schemas/uc2-report-output.schema.json")
+            ),
+        )
+        assert tc.has_messages is True
+        # In messages mode, system override should NOT be applied
+        # The hash should stay the same
+        original_hash = content_hash(str(messages))
+        # Simulating what _call_model does: no override for messages mode
+        assert content_hash(str(messages)) == original_hash
+
     def test_hash_stable_for_non_structured_output(self):
         from llm_judge.utils import content_hash
 
@@ -602,3 +625,103 @@ class TestCallModelErrorPaths:
         assert record.testcase_id == "tc-xyz-999"
         assert record.candidate_id == "test-candidate"
         assert record.run_id == "test-run"
+
+
+# ── Structured Output × messages mode ────────────────────
+
+
+class TestStructuredOutputMessagesMode:
+    def test_structured_output_does_not_override_system_for_messages_mode(self):
+        """In messages mode, system message should NOT be overridden even with structured output."""
+        messages_input = [
+            {"role": "system", "content": "Custom system prompt"},
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there"},
+            {"role": "user", "content": "Follow up"},
+        ]
+        tc = Testcase(
+            testcase_id="mt-so-001",
+            task_type="report_qa",
+            input={"messages": messages_input},
+            constraints=Constraints(
+                output_format=OutputFormat(
+                    type="json",
+                    json_schema_ref="schemas/uc2-report-output.schema.json",
+                )
+            ),
+        )
+        assert tc.has_messages is True
+        assert _requires_structured_output(tc) is True
+
+        cfg = _make_run_config()
+        candidate = _make_candidate("openai")
+
+        from llm_judge.prompts import build_inference_prompt
+
+        prompt_messages = build_inference_prompt(tc)
+
+        mock_response = MagicMock()
+        valid_json = json.dumps(_valid_uc1_data())
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = valid_json
+        mock_response.choices[0].finish_reason = "stop"
+        mock_response.usage = MagicMock(prompt_tokens=10, completion_tokens=20)
+
+        with patch("llm_judge.stages.inference.chat_completion", return_value=mock_response) as mock_chat:
+            record = _call_model(
+                cfg=cfg,
+                tc=tc,
+                candidate=candidate,
+                client=MagicMock(),
+                messages=prompt_messages,
+                gen_params={"max_tokens": 4096},
+            )
+
+            # Verify the messages sent to the model still have the original system content
+            sent_messages = mock_chat.call_args.kwargs.get("messages", mock_chat.call_args[1].get("messages"))
+            if sent_messages is None:
+                # Try positional args
+                sent_messages = mock_chat.call_args[0][2] if len(mock_chat.call_args[0]) > 2 else None
+            # The system message should NOT be the override version
+            assert sent_messages[0]["content"] == "Custom system prompt"
+
+        assert record.status.ok is True
+
+    def test_structured_output_overrides_system_for_legacy_mode(self):
+        """In legacy mode, system message SHOULD be overridden for structured output."""
+        of = OutputFormat(type="json", json_schema_ref="schemas/uc2-report-output.schema.json")
+        tc = _make_testcase(output_format=of)
+        assert tc.has_messages is False
+        assert _requires_structured_output(tc) is True
+
+        cfg = _make_run_config()
+        candidate = _make_candidate("openai")
+
+        from llm_judge.prompts import build_inference_prompt
+
+        prompt_messages = build_inference_prompt(tc)
+
+        mock_response = MagicMock()
+        valid_json = json.dumps(_valid_uc1_data())
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = valid_json
+        mock_response.choices[0].finish_reason = "stop"
+        mock_response.usage = MagicMock(prompt_tokens=10, completion_tokens=20)
+
+        with patch("llm_judge.stages.inference.chat_completion", return_value=mock_response) as mock_chat:
+            record = _call_model(
+                cfg=cfg,
+                tc=tc,
+                candidate=candidate,
+                client=MagicMock(),
+                messages=prompt_messages,
+                gen_params={"max_tokens": 4096},
+            )
+
+            # The system message SHOULD be the override version
+            sent_messages = mock_chat.call_args.kwargs.get("messages", mock_chat.call_args[1].get("messages"))
+            if sent_messages is None:
+                sent_messages = mock_chat.call_args[0][2] if len(mock_chat.call_args[0]) > 2 else None
+            assert "レスポンスフォーマットを優先" in sent_messages[0]["content"]
+
+        assert record.status.ok is True

@@ -12,6 +12,7 @@ Results are written to data/consistency-<run_id>.jsonl.
 from __future__ import annotations
 
 import json
+import os
 from collections import defaultdict
 from pathlib import Path
 
@@ -29,6 +30,18 @@ from llm_judge.models import (
 from llm_judge.prompts import build_consistency_judge_prompt
 from llm_judge.testcase_loader import load_testcase_map
 from llm_judge.utils import read_jsonl, write_jsonl
+
+
+def _progress_log_enabled() -> bool:
+    """Return True if per-call progress logs should be printed."""
+    v = os.getenv("LLM_JUDGE_PROGRESS_LOG", "1").strip().lower()
+    return v not in {"0", "false", "no", "off"}
+
+
+def _progress_log(message: str) -> None:
+    """Print a progress line with flush so long calls remain visible."""
+    if _progress_log_enabled():
+        print(message, flush=True)
 
 
 def run_consistency(
@@ -68,6 +81,8 @@ def run_consistency(
 
     total = len(eligible) * len(cfg.judges)
 
+    call_index = 0
+
     with Progress() as progress:
         task_bar = progress.add_task("Consistency", total=total)
 
@@ -80,6 +95,17 @@ def run_consistency(
             outputs = [inf.output.text for inf in inf_list]
 
             for judge_ref in cfg.judges:
+                call_index += 1
+                _progress_log(
+                    "[consistency {}/{}] start testcase={} candidate={} judge={} repeats={}".format(
+                        call_index,
+                        total,
+                        tc_id,
+                        candidate_id,
+                        judge_ref.judge_id,
+                        len(outputs),
+                    )
+                )
                 client = create_client(judge_ref.vendor)
                 messages = build_consistency_judge_prompt(
                     testcase=tc,
@@ -97,6 +123,17 @@ def run_consistency(
                     repeat_count=len(outputs),
                 )
                 records.append(rec)
+                status = "ok" if rec.status.ok else f"error:{rec.status.error_type}"
+                _progress_log(
+                    "[consistency {}/{}] done testcase={} candidate={} judge={} status={}".format(
+                        call_index,
+                        total,
+                        tc_id,
+                        candidate_id,
+                        judge_ref.judge_id,
+                        status,
+                    )
+                )
                 progress.advance(task_bar)
 
     write_jsonl(out, records)

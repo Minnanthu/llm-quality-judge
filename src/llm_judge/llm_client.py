@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from openai import (
@@ -24,6 +25,10 @@ from llm_judge.config import resolve_vendor_env
 
 
 RETRYABLE_ERRORS = (APITimeoutError, APIConnectionError, RateLimitError)
+_DEFAULT_REQUEST_TIMEOUT_SECONDS = float(
+    os.getenv("LLM_JUDGE_REQUEST_TIMEOUT_SECONDS", "120")
+)
+_RETRY_ATTEMPTS = max(1, int(os.getenv("LLM_JUDGE_RETRY_ATTEMPTS", "2")))
 
 
 def _is_retryable_api_error(exc: Exception) -> bool:
@@ -56,7 +61,7 @@ def create_client(vendor: str, endpoint: str | None = None) -> OpenAI:
 @retry(
     retry=retry_if_exception(_is_retryable_api_error)
     | retry_if_exception_type(RETRYABLE_ERRORS),
-    stop=stop_after_attempt(3),
+    stop=stop_after_attempt(_RETRY_ATTEMPTS),
     wait=wait_exponential(multiplier=1, min=2, max=30),
     reraise=True,
 )
@@ -70,8 +75,11 @@ def chat_completion(
     if "max_tokens" in kwargs and model.startswith(("gpt-5", "o1", "o3")):
         kwargs["max_completion_tokens"] = kwargs.pop("max_tokens")
 
+    timeout = kwargs.pop("timeout", _DEFAULT_REQUEST_TIMEOUT_SECONDS)
+
     return client.chat.completions.create(
         model=model,
         messages=messages,
+        timeout=timeout,
         **kwargs,
     )

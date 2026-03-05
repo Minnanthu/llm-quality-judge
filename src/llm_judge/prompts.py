@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 from warnings import warn
 
+import copy
+
 from llm_judge.models import Constraints, JudgeRef, Testcase
 from llm_judge.schema_validation import resolve_schema_path
 
@@ -90,6 +92,9 @@ def load_rubric(version: str) -> str:
 
 def build_inference_prompt(testcase: Testcase) -> list[dict[str, str]]:
     """Build chat messages for candidate model inference."""
+    if testcase.has_messages:
+        return copy.deepcopy(testcase.input["messages"])
+
     template = load_template(testcase.task_type)
     constraints = testcase.constraints or Constraints()
 
@@ -145,6 +150,45 @@ def _format_input(input_data: dict[str, Any]) -> str:
     return "\n\n".join(parts)
 
 
+# ── Constraints formatting for judge prompts ─────────────
+
+
+def _format_constraints_for_judge(constraints: Constraints | None) -> str:
+    """Format constraints as a section for judge prompts.
+
+    Returns an empty string when constraints is None or has no content.
+    """
+    if constraints is None:
+        return ""
+
+    parts: list[str] = []
+
+    if constraints.required_points:
+        items = "\n".join(f"  - {p}" for p in constraints.required_points)
+        parts.append(f"- required_points:\n{items}")
+
+    if constraints.forbidden_points:
+        items = "\n".join(f"  - {p}" for p in constraints.forbidden_points)
+        parts.append(f"- forbidden_points:\n{items}")
+
+    if constraints.output_format:
+        fmt = constraints.output_format
+        fmt_parts: list[str] = []
+        if fmt.type:
+            fmt_parts.append(f"  - type: {fmt.type}")
+        if fmt.json_schema_ref:
+            fmt_parts.append(f"  - json_schema_ref: {fmt.json_schema_ref}")
+        if fmt.template_ref:
+            fmt_parts.append(f"  - template_ref: {fmt.template_ref}")
+        if fmt_parts:
+            parts.append("- output_format:\n" + "\n".join(fmt_parts))
+
+    if not parts:
+        return ""
+
+    return "\n\n## 制約条件\n" + "\n".join(parts)
+
+
 # ── Judge prompts ─────────────────────────────────────────
 
 
@@ -190,13 +234,15 @@ def build_pairwise_judge_prompt(
 }}
 """
 
+    constraints_section = _format_constraints_for_judge(testcase.constraints)
+
     user_msg = f"""## タスク情報
 - task_type: {testcase.task_type}
 - testcase_id: {testcase.testcase_id}
 
 ## 入力
 {_format_input(testcase.input)}
-
+{constraints_section}
 ## Answer {label_a}
 {output_a}
 
@@ -249,13 +295,15 @@ def build_absolute_judge_prompt(
 }}
 """
 
+    constraints_section = _format_constraints_for_judge(testcase.constraints)
+
     user_msg = f"""## タスク情報
 - task_type: {testcase.task_type}
 - testcase_id: {testcase.testcase_id}
 
 ## 入力
 {_format_input(testcase.input)}
-
+{constraints_section}
 ## 回答
 {output_text}
 """

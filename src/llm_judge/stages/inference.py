@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import json
 import logging
+import os
 import re
 import time
 from datetime import datetime, timezone
@@ -41,6 +42,18 @@ _STRUCTURED_OUTPUT_MIN_MAX_TOKENS = 4096
 
 # Vendors known to support response_format=json_schema (OpenAI Structured Outputs)
 _JSON_SCHEMA_FORMAT_VENDORS = frozenset({"openai", "azure-openai"})
+
+
+def _progress_log_enabled() -> bool:
+    """Return True if per-call progress logs should be printed."""
+    v = os.getenv("LLM_JUDGE_PROGRESS_LOG", "1").strip().lower()
+    return v not in {"0", "false", "no", "off"}
+
+
+def _progress_log(message: str) -> None:
+    """Print a progress line with flush so long calls remain visible."""
+    if _progress_log_enabled():
+        print(message, flush=True)
 
 
 def _requires_structured_output(tc: Testcase) -> bool:
@@ -222,6 +235,8 @@ def run_inference(config_path: str, output_path: str | None = None) -> Path:
 
     total = len(testcases) * len(cfg.candidates) * cfg.protocol.repeats.inference_repeats
 
+    call_index = 0
+
     with Progress() as progress:
         task = progress.add_task("Inference", total=total)
 
@@ -233,6 +248,17 @@ def run_inference(config_path: str, output_path: str | None = None) -> Path:
                 gen_params = dict(candidate.generation_params)
 
                 for repeat_idx in range(cfg.protocol.repeats.inference_repeats):
+                    call_index += 1
+                    _progress_log(
+                        "[inference {}/{}] start testcase={} candidate={} repeat={}/{}".format(
+                            call_index,
+                            total,
+                            tc.testcase_id,
+                            candidate.candidate_id,
+                            repeat_idx + 1,
+                            cfg.protocol.repeats.inference_repeats,
+                        )
+                    )
                     record = _call_model(
                         cfg=cfg,
                         tc=tc,
@@ -242,6 +268,18 @@ def run_inference(config_path: str, output_path: str | None = None) -> Path:
                         gen_params=gen_params,
                     )
                     records.append(record)
+                    latency_ms = record.timing.latency_ms if record.timing else 0
+                    status = "ok" if record.status.ok else f"error:{record.status.error_type}"
+                    _progress_log(
+                        "[inference {}/{}] done status={} latency_ms={:.1f} testcase={} candidate={}".format(
+                            call_index,
+                            total,
+                            status,
+                            latency_ms,
+                            tc.testcase_id,
+                            candidate.candidate_id,
+                        )
+                    )
                     progress.advance(task)
 
     validate_artifacts("inference-record", records)
@@ -280,10 +318,11 @@ def _call_model(
             extra_kwargs["response_format"] = _build_response_format(
                 json_schema_ref, tc.testcase_id
             )
-            actual_messages = _apply_structured_output_system_message(messages)
-            # [P2] Recompute hash from the messages actually sent.
-            actual_input_hash = content_hash(str(actual_messages))
-            prompt_hash = content_hash(str(actual_messages))
+            if not tc.has_messages:
+                actual_messages = _apply_structured_output_system_message(messages)
+                # [P2] Recompute hash from the messages actually sent.
+                actual_input_hash = content_hash(str(actual_messages))
+                prompt_hash = content_hash(str(actual_messages))
         elif requires_so:
             logger.warning(
                 "Structured output skipped for %s/%s: vendor '%s' does not support "

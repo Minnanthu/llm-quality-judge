@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ── Testcase ──────────────────────────────────────────────
+
+
+class InputMessage(BaseModel):
+    role: Literal["system", "user", "assistant"]
+    content: str
 
 
 class TestcaseMetadata(BaseModel):
@@ -40,6 +45,31 @@ class Testcase(BaseModel):
     input: dict[str, Any]
     metadata: TestcaseMetadata | None = None
     constraints: Constraints | None = None
+
+    @property
+    def has_messages(self) -> bool:
+        messages = self.input.get("messages")
+        return isinstance(messages, list) and len(messages) > 0
+
+    @property
+    def messages(self) -> list[InputMessage] | None:
+        if not self.has_messages:
+            return None
+        return [InputMessage.model_validate(m) for m in self.input["messages"]]
+
+    @model_validator(mode="after")
+    def validate_input_mode(self) -> "Testcase":
+        has_messages_key = "messages" in self.input
+        if not has_messages_key:
+            return self
+        keys = set(self.input.keys())
+        if keys != {"messages"}:
+            raise ValueError("input.messages と他キーの混在は不許可")
+        if not isinstance(self.input["messages"], list) or len(self.input["messages"]) == 0:
+            raise ValueError("input.messages は1件以上必要")
+        for m in self.input["messages"]:
+            InputMessage.model_validate(m)
+        return self
 
 
 # ── RunConfig ─────────────────────────────────────────────

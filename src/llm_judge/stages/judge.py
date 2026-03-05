@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 from itertools import combinations
 from pathlib import Path
@@ -30,6 +31,18 @@ from llm_judge.schema_validation import (
 )
 from llm_judge.testcase_loader import load_testcase_map
 from llm_judge.utils import read_jsonl, write_jsonl
+
+
+def _progress_log_enabled() -> bool:
+    """Return True if per-call progress logs should be printed."""
+    v = os.getenv("LLM_JUDGE_PROGRESS_LOG", "1").strip().lower()
+    return v not in {"0", "false", "no", "off"}
+
+
+def _progress_log(message: str) -> None:
+    """Print a progress line with flush so long calls remain visible."""
+    if _progress_log_enabled():
+        print(message, flush=True)
 
 
 def run_judge(
@@ -76,6 +89,8 @@ def run_judge(
     # Calculate total work
     total = _estimate_total(cfg, pairwise_inf_by_tc, inf_by_tc)
 
+    call_index = 0
+
     with Progress() as progress:
         task = progress.add_task("Judging", total=total)
 
@@ -92,6 +107,17 @@ def run_judge(
                         # All pairs
                         pairwise_list = pairwise_inf_by_tc.get(tc_id, [])
                         for (idx_a, inf_a), (idx_b, inf_b) in combinations(pairwise_list, 2):
+                            call_index += 1
+                            _progress_log(
+                                "[judge {}/{}] start mode=pairwise testcase={} judge={} pair={} vs {}".format(
+                                    call_index,
+                                    total,
+                                    tc_id,
+                                    judge_ref.judge_id,
+                                    inf_a.candidate_id,
+                                    inf_b.candidate_id,
+                                )
+                            )
                             rec = _judge_pairwise(
                                 cfg=cfg,
                                 tc=tc,
@@ -105,10 +131,29 @@ def run_judge(
                                 inf_path=inf_path,
                             )
                             records.append(rec)
+                            _progress_log(
+                                "[judge {}/{}] done mode=pairwise testcase={} judge={} winner={}".format(
+                                    call_index,
+                                    total,
+                                    tc_id,
+                                    judge_ref.judge_id,
+                                    rec.scores.overall_winner or "n/a",
+                                )
+                            )
                             progress.advance(task)
 
                     if mode in ("absolute", "hybrid"):
                         for idx, inf in inf_list:
+                            call_index += 1
+                            _progress_log(
+                                "[judge {}/{}] start mode=absolute testcase={} judge={} candidate={}".format(
+                                    call_index,
+                                    total,
+                                    tc_id,
+                                    judge_ref.judge_id,
+                                    inf.candidate_id,
+                                )
+                            )
                             rec = _judge_absolute(
                                 cfg=cfg,
                                 tc=tc,
@@ -119,6 +164,18 @@ def run_judge(
                                 inf_path=inf_path,
                             )
                             records.append(rec)
+                            _progress_log(
+                                "[judge {}/{}] done mode=absolute testcase={} judge={} candidate={} score={}".format(
+                                    call_index,
+                                    total,
+                                    tc_id,
+                                    judge_ref.judge_id,
+                                    inf.candidate_id,
+                                    rec.scores.overall_score
+                                    if rec.scores.overall_score is not None
+                                    else "n/a",
+                                )
+                            )
                             progress.advance(task)
 
     validate_artifacts("judgement-record", records)
