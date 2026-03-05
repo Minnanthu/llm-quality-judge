@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 _STRUCTURED_OUTPUT_MIN_MAX_TOKENS = 4096
 
 # Vendors known to support response_format=json_schema (OpenAI Structured Outputs)
-_JSON_SCHEMA_FORMAT_VENDORS = frozenset({"openai", "azure-openai"})
+_JSON_SCHEMA_FORMAT_VENDORS = frozenset({"openai", "azure-openai", "tsuzumi2"})
 
 
 def _progress_log_enabled() -> bool:

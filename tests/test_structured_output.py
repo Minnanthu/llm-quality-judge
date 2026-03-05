@@ -356,8 +356,8 @@ class TestSupportsJsonSchemaFormat:
     def test_azure_openai_supported(self):
         assert _supports_json_schema_format("azure-openai") is True
 
-    def test_tsuzumi2_not_supported(self):
-        assert _supports_json_schema_format("tsuzumi2") is False
+    def test_tsuzumi2_supported(self):
+        assert _supports_json_schema_format("tsuzumi2") is True
 
     def test_unknown_vendor_not_supported(self):
         assert _supports_json_schema_format("unknown-vendor") is False
@@ -455,13 +455,13 @@ class TestSchemaFiles:
 
 class TestVendorFallback:
     def test_structured_output_conditions_with_unsupported_vendor(self, uc1_schema_path):
-        """When json_schema_ref is set but vendor is unsupported,
+        """When json_schema_ref is set but vendor is truly unsupported,
         _requires_structured_output is True but _supports_json_schema_format is False.
         This combination triggers the fallback path."""
         of = OutputFormat(type="json", json_schema_ref=uc1_schema_path)
         tc = _make_testcase(output_format=of)
         assert _requires_structured_output(tc) is True
-        assert _supports_json_schema_format("tsuzumi2") is False
+        assert _supports_json_schema_format("unknown-vendor") is False
 
     def test_structured_output_conditions_with_supported_vendor(self, uc1_schema_path):
         of = OutputFormat(type="json", json_schema_ref=uc1_schema_path)
@@ -469,6 +469,7 @@ class TestVendorFallback:
         assert _requires_structured_output(tc) is True
         assert _supports_json_schema_format("openai") is True
         assert _supports_json_schema_format("azure-openai") is True
+        assert _supports_json_schema_format("tsuzumi2") is True
 
 
 # ── path resolution is repo-root-based ───────────────────
@@ -579,12 +580,12 @@ class TestCallModelErrorPaths:
         assert "not valid JSON" in record.status.error_message
 
     def test_unsupported_vendor_does_not_fail(self):
-        """Non-supported vendor with json_schema_ref -> falls back to free-text,
+        """Truly unsupported vendor with json_schema_ref -> falls back to free-text,
         does NOT produce a failure record from schema loading."""
         of = OutputFormat(type="json", json_schema_ref="nonexistent/schema.json")
         tc = _make_testcase(output_format=of)
         cfg = _make_run_config()
-        candidate = _make_candidate("tsuzumi2")
+        candidate = _make_candidate("unknown-vendor")
         messages = [{"role": "system", "content": "sys"}, {"role": "user", "content": "hi"}]
 
         # Mock chat_completion to return a normal response

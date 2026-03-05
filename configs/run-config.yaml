@@ -10,9 +10,9 @@ candidates:
   # [注意] Structured Output の要否は testcase の constraints.output_format 設定で決まります。
   # output_format.type == "json" かつ json_schema_ref が設定されている場合のみ
   # response_format=json_schema を試行します。
-  # vendor が "openai"/"azure-openai" 以外なら自由文フォールバックで推論されます。
+  # 対応ベンダー: "openai", "azure-openai", "tsuzumi2"
   - candidate_id: "tsuzumi2-28b"
-    vendor: "tsuzumi2"   # json_schema_ref 設定時は structured output 非対応 → フォールバック推論
+    vendor: "tsuzumi2"   # json_schema_ref 設定時は structured output 対応
     model_id: "tsuzumi2-28b"
     prompt_version: "v1"
     generation_params:
